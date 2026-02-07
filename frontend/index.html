@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Outreach System - Dashboard</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1>📧 Email Outreach System</h1>
+            <p class="subtitle">Private, Reliable, 24/7 Email Automation</p>
+        </header>
+
+        <!-- Metrics Cards -->
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <div class="metric-label">Sent Today</div>
+                <div class="metric-value" id="sentToday">0 / 500</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Replies</div>
+                <div class="metric-value" id="replies">0</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Failed</div>
+                <div class="metric-value" id="failed">0</div>
+            </div>
+            <div class="metric-card status-card">
+                <div class="metric-label">Campaign Status</div>
+                <div class="metric-value" id="campaignStatus">STOPPED</div>
+            </div>
+        </div>
+
+        <!-- Progress Bar -->
+        <div class="progress-section">
+            <div class="progress-header">
+                <span>Daily Progress</span>
+                <span id="progressPercent">0%</span>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="controls-section">
+            <h2>Campaign Controls</h2>
+            <div class="button-group">
+                <button class="btn btn-success" onclick="startCampaign()">▶ Start</button>
+                <button class="btn btn-warning" onclick="pauseCampaign()">⏸ Pause</button>
+                <button class="btn btn-danger" onclick="stopCampaign()">⏹ Stop</button>
+            </div>
+        </div>
+
+        <!-- Lead Upload -->
+        <div class="upload-section">
+            <h2>Upload Leads</h2>
+            <div class="upload-area">
+                <input type="file" id="csvFile" accept=".csv" />
+                <button class="btn btn-primary" onclick="uploadLeads()">📤 Upload CSV</button>
+            </div>
+            <p class="upload-hint">CSV must contain: email (required), first_name, company, industry (optional)</p>
+        </div>
+
+        <!-- Chart -->
+        <div class="chart-section">
+            <h2>Emails Sent Over Time</h2>
+            <canvas id="emailChart"></canvas>
+        </div>
+
+        <!-- Logs -->
+        <div class="logs-section">
+            <h2>Activity Logs</h2>
+            <div class="logs-container" id="logsContainer">
+                <p class="no-logs">No logs yet</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
