@@ -10,128 +10,300 @@
 </head>
 
 <body>
-    <div class="container">
-        <!-- Header -->
-        <header class="header">
-            <h1>Enterprise Outreach Dashboard</h1>
-            <p class="subtitle">Your dedicated 24/7 outreach engine</p>
-        </header>
+    <div class="app-layout">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h1>📧 Outreach</h1>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="#dashboard" class="nav-item active" onclick="navigateTo('dashboard')">
+                    <span class="nav-icon">📊</span>
+                    <span class="nav-text">Dashboard</span>
+                </a>
+                <a href="#leads" class="nav-item" onclick="navigateTo('leads')">
+                    <span class="nav-icon">👥</span>
+                    <span class="nav-text">Leads</span>
+                </a>
+                <a href="#analytics" class="nav-item" onclick="navigateTo('analytics')">
+                    <span class="nav-icon">📈</span>
+                    <span class="nav-text">Analytics</span>
+                </a>
+                <a href="#templates" class="nav-item" onclick="navigateTo('templates')">
+                    <span class="nav-icon">✉️</span>
+                    <span class="nav-text">Templates</span>
+                </a>
+                <a href="#settings" class="nav-item" onclick="navigateTo('settings')">
+                    <span class="nav-icon">⚙️</span>
+                    <span class="nav-text">Settings</span>
+                </a>
+            </nav>
+        </aside>
 
-        <!-- Metrics Cards -->
-        <div class="metrics-grid">
-            <div class="metric-card">
-                <div class="metric-label">SENT TODAY:</div>
-                <div class="metric-value" id="sentToday">0 / 500</div>
-            </div>
-            <div class="metric-card">
-                <div class="metric-label">REPLIES:</div>
-                <div class="metric-value" id="replies">0</div>
-            </div>
-            <div class="metric-card">
-                <div class="metric-label">FAILED:</div>
-                <div class="metric-value" id="failed">0</div>
-            </div>
-            <div class="metric-card status-card">
-                <div class="metric-label">CAMPAIGN STATUS</div>
-                <div class="status-badge" id="campaignStatus">Stopped</div>
-            </div>
-        </div>
-
-        <!-- Progress Bar -->
-        <div class="progress-section">
-            <div class="progress-header">
-                <span>Daily Progress</span>
-                <span id="progressPercent">0%</span>
-            </div>
-            <div class="progress-bar">
-                <div class="progress-fill" id="progressFill"></div>
-            </div>
-        </div>
-
-        <!-- Command Center -->
-        <div class="command-section">
-            <h2>Command Center</h2>
-            <div class="button-grid">
-                <button class="btn btn-start" onclick="startCampaign()">▶ START</button>
-                <button class="btn btn-pause" onclick="pauseCampaign()">⏸ PAUSE</button>
-                <button class="btn btn-stop" onclick="stopCampaign()">⏹ STOP</button>
-            </div>
-        </div>
-
-        <!-- Upload Leads -->
-        <div class="upload-section">
-            <h2>Upload Leads</h2>
-            <div class="upload-box">
-                <div class="upload-area" id="uploadArea">
-                    <p>Drag and drop CSV file here, or <span class="browse-link">Browse...</span></p>
-                    <input type="file" id="csvFile" accept=".csv" style="display: none;">
-                </div>
-                <button class="btn btn-upload" onclick="uploadLeads()">📤 UPLOAD CSV</button>
-            </div>
-        </div>
-
-        <!-- Email Editor -->
-        <div class="editor-section" id="editorSection" style="display: none;">
-            <h2>Email Editor</h2>
-
-            <!-- Available Variables -->
-            <div class="variables-section">
-                <div id="variablesContainer" class="variables-tags"></div>
-            </div>
-
-            <!-- Template Grid -->
-            <div class="template-grid">
-                <!-- Initial Email -->
-                <div class="template-column">
-                    <h3>Initial Email</h3>
-                    <label>Subject to initial email</label>
-                    <input type="text" id="initialSubject" class="input-field" placeholder="Enter subject">
-                    <label>Body</label>
-                    <div id="initialVariables" class="inline-variables"></div>
-                    <textarea id="initialBody" class="textarea-field" rows="4"
-                        placeholder="Heroes your comment to {{company}}"></textarea>
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Dashboard Page -->
+            <div id="dashboard-page" class="page active">
+                <div class="page-header">
+                    <h1>Dashboard</h1>
+                    <p class="subtitle">Your dedicated 24/7 outreach engine</p>
                 </div>
 
-                <!-- Follow-up 1 -->
-                <div class="template-column">
-                    <h3>Follow-up 1 (after 3 days)</h3>
-                    <label>Subject to for your email</label>
-                    <input type="text" id="followup1Subject" class="input-field" placeholder="Enter subject">
-                    <label>Body</label>
-                    <div id="followup1Variables" class="inline-variables"></div>
-                    <textarea id="followup1Body" class="textarea-field" rows="4"
-                        placeholder="Heroes your content for {{company}}"></textarea>
+                <!-- Metrics Cards -->
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <div class="metric-label">SENT TODAY:</div>
+                        <div class="metric-value" id="sentToday">0 / 500</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">REPLIES:</div>
+                        <div class="metric-value" id="replies">0</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">FAILED:</div>
+                        <div class="metric-value" id="failed">0</div>
+                    </div>
+                    <div class="metric-card status-card">
+                        <div class="metric-label">CAMPAIGN STATUS</div>
+                        <div class="status-badge" id="campaignStatus">Stopped</div>
+                    </div>
                 </div>
 
-                <!-- Follow-up 2 -->
-                <div class="template-column">
-                    <h3>Follow-up 2 (after 6 days)</h3>
-                    <label>Subject to free company 2</label>
-                    <input type="text" id="followup2Subject" class="input-field" placeholder="Enter subject">
-                    <label>Body</label>
-                    <div id="followup2Variables" class="inline-variables"></div>
-                    <textarea id="followup2Body" class="textarea-field" rows="4"
-                        placeholder="Videos your content to {{company}}"></textarea>
+                <!-- Progress Bar -->
+                <div class="progress-section">
+                    <div class="progress-header">
+                        <span>Daily Progress</span>
+                        <span id="progressPercent">0%</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                </div>
+
+                <!-- Command Center -->
+                <div class="command-section">
+                    <h2>Command Center</h2>
+                    <div class="button-grid">
+                        <button class="btn btn-start" onclick="startCampaign()">▶ START</button>
+                        <button class="btn btn-pause" onclick="pauseCampaign()">⏸ PAUSE</button>
+                        <button class="btn btn-stop" onclick="stopCampaign()">⏹ STOP</button>
+                    </div>
+                </div>
+
+                <!-- Upload Leads -->
+                <div class="upload-section">
+                    <h2>Upload Leads</h2>
+                    <div class="upload-box">
+                        <div class="upload-area" id="uploadArea">
+                            <p>Drag and drop CSV file here, or <span class="browse-link">Browse...</span></p>
+                            <input type="file" id="csvFile" accept=".csv" style="display: none;">
+                        </div>
+                        <button class="btn btn-upload" onclick="uploadLeads()">📤 UPLOAD CSV</button>
+                    </div>
+                </div>
+
+                <!-- Recent Activity -->
+                <div class="logs-section">
+                    <h2>Recent Activity</h2>
+                    <div id="dashboardLogsContainer" class="logs-container"></div>
                 </div>
             </div>
 
-            <button class="btn btn-save" onclick="saveTemplates()">SAVE TEMPLATES</button>
-        </div>
+            <!-- Leads Page -->
+            <div id="leads-page" class="page">
+                <div class="page-header">
+                    <h1>Lead Management</h1>
+                    <p class="subtitle">Manage all your leads in one place</p>
+                </div>
 
-        <!-- Charts and Logs -->
-        <div class="bottom-grid">
-            <!-- Chart -->
-            <div class="chart-section">
-                <h2>Emails Sent Over Time</h2>
-                <canvas id="emailChart"></canvas>
+                <!-- Controls -->
+                <div class="leads-controls">
+                    <input type="text" id="leadSearch" class="search-input"
+                        placeholder="Search by email, name, or company..." oninput="searchLeads()">
+
+                    <div class="filter-tabs">
+                        <button class="filter-tab active" onclick="filterLeads('all')">All</button>
+                        <button class="filter-tab" onclick="filterLeads('pending')">Pending</button>
+                        <button class="filter-tab" onclick="filterLeads('sent')">Sent</button>
+                        <button class="filter-tab" onclick="filterLeads('replied')">Replied</button>
+                        <button class="filter-tab" onclick="filterLeads('failed')">Failed</button>
+                    </div>
+                </div>
+
+                <!-- Leads Table -->
+                <div class="table-container">
+                    <table id="leadsTable" class="leads-table">
+                        <thead>
+                            <tr>
+                                <th><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"></th>
+                                <th onclick="sortLeads('email')">Email ↕</th>
+                                <th>Name</th>
+                                <th>Company</th>
+                                <th onclick="sortLeads('status')">Status ↕</th>
+                                <th onclick="sortLeads('last_sent_at')">Last Sent ↕</th>
+                                <th>Follow-ups</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="leadsTableBody">
+                            <tr>
+                                <td colspan="8" class="no-data">Loading leads...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination -->
+                <div class="pagination" id="leadsPagination"></div>
             </div>
 
-            <!-- Activity Log -->
-            <div class="logs-section">
-                <h2>Activity Log</h2>
-                <div id="logsContainer" class="logs-container"></div>
+            <!-- Analytics Page -->
+            <div id="analytics-page" class="page">
+                <div class="page-header">
+                    <h1>Analytics & Reports</h1>
+                    <p class="subtitle">Detailed insights into your campaigns</p>
+                </div>
+
+                <!-- Stats Summary -->
+                <div class="analytics-stats">
+                    <div class="stat-card">
+                        <div class="stat-label">Total Leads</div>
+                        <div class="stat-value" id="analyticsTotal">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Reply Rate</div>
+                        <div class="stat-value" id="analyticsReplyRate">0%</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Failure Rate</div>
+                        <div class="stat-value" id="analyticsFailureRate">0%</div>
+                    </div>
+                </div>
+
+                <!-- Charts Grid -->
+                <div class="charts-grid">
+                    <div class="chart-card">
+                        <h3>Emails Sent Over Time</h3>
+                        <canvas id="timelineChart"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Lead Status Distribution</h3>
+                        <canvas id="statusChart"></canvas>
+                    </div>
+                </div>
             </div>
-        </div>
+
+            <!-- Templates Page -->
+            <div id="templates-page" class="page">
+                <div class="page-header">
+                    <h1>Email Templates</h1>
+                    <p class="subtitle">Customize your outreach messages</p>
+                </div>
+
+                <!-- Available Variables -->
+                <div class="variables-section">
+                    <h3>Available Variables (click to insert)</h3>
+                    <div id="variablesContainer" class="variables-tags">
+                        <p class="no-data">Upload CSV to see available columns</p>
+                    </div>
+                </div>
+
+                <!-- Template Grid -->
+                <div class="template-grid">
+                    <!-- Initial Email -->
+                    <div class="template-column">
+                        <h3>📧 Initial Email</h3>
+                        <label>Subject</label>
+                        <input type="text" id="initialSubject" class="input-field" placeholder="Enter subject">
+                        <label>Body</label>
+                        <div id="initialVariables" class="inline-variables"></div>
+                        <textarea id="initialBody" class="textarea-field" rows="6"
+                            placeholder="Email body. Use {{column_name}} for variables."></textarea>
+                    </div>
+
+                    <!-- Follow-up 1 -->
+                    <div class="template-column">
+                        <h3>🔄 Follow-up 1 (after 3 days)</h3>
+                        <label>Subject</label>
+                        <input type="text" id="followup1Subject" class="input-field" placeholder="Enter subject">
+                        <label>Body</label>
+                        <div id="followup1Variables" class="inline-variables"></div>
+                        <textarea id="followup1Body" class="textarea-field" rows="6"
+                            placeholder="First follow-up body"></textarea>
+                    </div>
+
+                    <!-- Follow-up 2 -->
+                    <div class="template-column">
+                        <h3>🔄 Follow-up 2 (after 6 days)</h3>
+                        <label>Subject</label>
+                        <input type="text" id="followup2Subject" class="input-field" placeholder="Enter subject">
+                        <label>Body</label>
+                        <div id="followup2Variables" class="inline-variables"></div>
+                        <textarea id="followup2Body" class="textarea-field" rows="6"
+                            placeholder="Second follow-up body"></textarea>
+                    </div>
+                </div>
+
+                <button class="btn btn-save" onclick="saveTemplates()">💾 SAVE TEMPLATES</button>
+            </div>
+
+            <!-- Settings Page -->
+            <div id="settings-page" class="page">
+                <div class="page-header">
+                    <h1>Settings</h1>
+                    <p class="subtitle">Configure your outreach system</p>
+                </div>
+
+                <div class="settings-grid">
+                    <!-- Email Configuration -->
+                    <div class="settings-card">
+                        <h3>📧 Email Configuration</h3>
+                        <div class="setting-item">
+                            <label>Email Address</label>
+                            <input type="text" id="settingsEmail" class="input-field" readonly>
+                        </div>
+                        <div class="setting-item">
+                            <label>SMTP Server</label>
+                            <input type="text" id="settingsSMTP" class="input-field" readonly>
+                        </div>
+                        <div class="setting-item">
+                            <label>Calendar Link</label>
+                            <input type="text" id="settingsCalendar" class="input-field" readonly>
+                        </div>
+                    </div>
+
+                    <!-- Sending Configuration -->
+                    <div class="settings-card">
+                        <h3>⚙️ Sending Configuration</h3>
+                        <div class="setting-item">
+                            <label>Daily Email Limit</label>
+                            <input type="number" id="settingsDailyLimit" class="input-field" readonly>
+                        </div>
+                        <div class="setting-item">
+                            <label>Delay Between Emails (seconds)</label>
+                            <input type="text" id="settingsDelay" class="input-field" readonly>
+                        </div>
+                        <div class="setting-item">
+                            <label>Pause Every N Emails</label>
+                            <input type="number" id="settingsPauseEvery" class="input-field" readonly>
+                        </div>
+                    </div>
+
+                    <!-- License Information -->
+                    <div class="settings-card">
+                        <h3>🔐 License Information</h3>
+                        <div class="setting-item">
+                            <label>License Key</label>
+                            <input type="text" id="settingsLicense" class="input-field" readonly>
+                        </div>
+                        <div class="setting-item">
+                            <label>Status</label>
+                            <span class="status-badge" style="background: #90EE90; color: #2E7D32;">Active</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
     </div>
 
     <script src="/static/app.js"></script>

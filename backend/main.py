@@ -84,8 +84,16 @@ async def upload_leads(
 ):
     """Upload leads CSV with deduplication."""
     try:
+        print(f"📤 Received file upload: {file.filename}, content_type: {file.content_type}")
+        
+        # Validate file type
+        if not file.filename.endswith('.csv'):
+            raise HTTPException(status_code=400, detail="Only CSV files are allowed")
+        
         # Read CSV
         contents = await file.read()
+        print(f"📊 File size: {len(contents)} bytes")
+        
         df = pd.read_csv(StringIO(contents.decode('utf-8')))
         
         # Validate required column
@@ -314,6 +322,286 @@ async def get_templates(db: Session = Depends(get_db)):
         }
     
     return {"templates": templates}
+
+
+# Lead Management APIs
+
+@app.get("/api/leads")
+async def get_leads(
+    page: int = 1,
+    limit: int = 50,
+    status: str = None,
+    search: str = None,
+    sort_by: str = "id",
+    sort_order: str = "desc",
+    db: Session = Depends(get_db)
+):
+    """Get leads with pagination and filters."""
+    try:
+        # Base query
+        query = db.query(Lead)
+        
+        # Filter by status
+        if status and status != "all":
+            query = query.filter(Lead.status == LeadStatus[status.upper()])
+        
+        # Search
+        if search:
+            search_term = f"%{search}%"
+            query = query.filter(
+                (Lead.email.like(search_term)) |
+                (Lead.data_json.like(search_term))
+            )
+        
+        # Count total
+        total = query.count()
+        
+        # Sort
+        if sort_by == "email":
+            sort_col = Lead.email
+        elif sort_by == "status":
+            sort_col = Lead.status
+        elif sort_by == "last_sent_at":
+            sort_col = Lead.last_sent_at
+        else:
+            sort_col = Lead.id
+        
+        if sort_order == "asc":
+            query = query.order_by(sort_col.asc())
+        else:
+            query = query.order_by(sort_col.desc())
+        
+        # Paginate
+        offset = (page - 1) * limit
+        leads = query.offset(offset).limit(limit).all()
+        
+        # Format leads
+        leads_data = []
+        for lead in leads:
+            lead_json = json.loads(lead.data_json) if lead.data_json else {}
+            leads_data.append({
+                "id": lead.id,
+                "email": lead.email,
+                "status": lead.status.value,
+                "followup_count": lead.followup_count,
+                "last_sent_at": lead.last_sent_at.isoformat() if lead.last_sent_at else None,
+                "created_at": lead.created_at.isoformat() if lead.created_at else None,
+                "data": lead_json
+            })
+        
+        return {
+            "leads": leads_data,
+            "total": total,
+            "page": page,
+            "pages": (total + limit - 1) // limit,
+            "limit": limit
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/leads/{lead_id}")
+async def update_lead(
+    lead_id: int,
+    update_data: dict,
+    db: Session = Depends(get_db)
+):
+    """Update a lead."""
+    try:
+        lead = db.query(Lead).filter(Lead.id == lead_id).first()
+        
+        if not lead:
+            raise HTTPException(status_code=404, detail="Lead not found")
+        
+        # Update status if provided
+        if "status" in update_data:
+            lead.status = LeadStatus[update_data["status"].upper()]
+        
+        # Update data if provided
+        if "data" in update_data:
+            lead.data_json = json.dumps(update_data["data"])
+        
+        # Reset follow-up count if status changed to pending
+        if "status" in update_data and update_data["status"].upper() == "PENDING":
+            lead.followup_count = 0
+            lead.last_sent_at = None
+        
+        db.commit()
+        
+        # Log event
+        log = Log(email=lead.email, event=f"Lead {lead.email} updated")
+        db.add(log)
+        db.commit()
+        
+        return {"success": True, "message": "Lead updated successfully"}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/leads/{lead_id}")
+async def delete_lead(
+    lead_id: int,
+    db: Session = Depends(get_db)
+):
+    """Delete a lead."""
+    try:
+        lead = db.query(Lead).filter(Lead.id == lead_id).first()
+        
+        if not lead:
+            raise HTTPException(status_code=404, detail="Lead not found")
+        
+        email = lead.email
+        db.delete(lead)
+        db.commit()
+        
+        # Log event
+        log = Log(email=email, event=f"Lead {email} deleted")
+        db.add(log)
+        db.commit()
+        
+        return {"success": True, "message": "Lead deleted successfully"}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/leads/bulk-delete")
+async def bulk_delete_leads(
+    lead_ids: dict,
+    db: Session = Depends(get_db)
+):
+    """Bulk delete leads."""
+    try:
+        ids = lead_ids.get("lead_ids", [])
+        
+        if not ids:
+            raise HTTPException(status_code=400, detail="No lead IDs provided")
+        
+        # Delete leads
+        deleted = db.query(Lead).filter(Lead.id.in_(ids)).delete(synchronize_session=False)
+        db.commit()
+        
+        # Log event
+        log = Log(email=None, event=f"Bulk deleted {deleted} leads")
+        db.add(log)
+        db.commit()
+        
+        return {"success": True, "deleted": deleted}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Analytics APIs
+
+@app.get("/api/analytics")
+async def get_analytics(
+    date_from: str = None,
+    date_to: str = None,
+    db: Session = Depends(get_db)
+):
+    """Get analytics data."""
+    try:
+        from datetime import datetime, timedelta
+        from sqlalchemy import func, case
+        
+        # Parse dates
+        if date_from:
+            start_date = datetime.strptime(date_from, "%Y-%m-%d")
+        else:
+            start_date = datetime.now() - timedelta(days=30)
+        
+        if date_to:
+            end_date = datetime.strptime(date_to, "%Y-%m-%d")
+        else:
+            end_date = datetime.now()
+        
+        # Overall stats
+        total_leads = db.query(Lead).count()
+        total_sent = db.query(Lead).filter(Lead.status == LeadStatus.SENT).count()
+        total_replied = db.query(Lead).filter(Lead.status == LeadStatus.REPLIED).count()
+        total_failed = db.query(Lead).filter(Lead.status == LeadStatus.FAILED).count()
+        total_pending = db.query(Lead).filter(Lead.status == LeadStatus.PENDING).count()
+        
+        # Calculate rates
+        reply_rate = (total_replied / total_sent * 100) if total_sent > 0 else 0
+        failure_rate = (total_failed / total_leads * 100) if total_leads > 0 else 0
+        
+        # Status distribution
+        status_distribution = {
+            "pending": total_pending,
+            "sent": total_sent,
+            "replied": total_replied,
+            "failed": total_failed
+        }
+        
+        # Daily stats (simplified - actual implementation would query logs)
+        daily_stats = []
+        current_date = start_date
+        while current_date <= end_date:
+            date_str = current_date.strftime("%Y-%m-%d")
+            
+            # Count emails sent on this day
+            day_start = current_date.replace(hour=0, minute=0, second=0)
+            day_end = current_date.replace(hour=23, minute=59, second=59)
+            
+            sent_count = db.query(Lead).filter(
+                Lead.last_sent_at >= day_start,
+                Lead.last_sent_at <= day_end
+            ).count()
+            
+            replied_count = db.query(Lead).filter(
+                Lead.status == LeadStatus.REPLIED,
+                Lead.last_sent_at >= day_start,
+                Lead.last_sent_at <= day_end
+            ).count()
+            
+            daily_stats.append({
+                "date": date_str,
+                "sent": sent_count,
+                "replied": replied_count
+            })
+            
+            current_date += timedelta(days=1)
+        
+        return {
+            "total_leads": total_leads,
+            "total_sent": total_sent,
+            "total_replied": total_replied,
+            "total_failed": total_failed,
+            "total_pending": total_pending,
+            "reply_rate": round(reply_rate, 2),
+            "failure_rate": round(failure_rate, 2),
+            "status_distribution": status_distribution,
+            "daily_stats": daily_stats
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Settings APIs
+
+@app.get("/api/settings")
+async def get_settings():
+    """Get current settings."""
+    return {
+        "email": config.EMAIL_ADDRESS,
+        "smtp_server": config.SMTP_SERVER,
+        "smtp_port": config.SMTP_PORT,
+        "imap_server": config.IMAP_SERVER,
+        "imap_port": config.IMAP_PORT,
+        "daily_limit": config.DAILY_EMAIL_LIMIT,
+        "min_delay": config.MIN_DELAY_SECONDS,
+        "max_delay": config.MAX_DELAY_SECONDS,
+        "pause_every_n": config.PAUSE_EVERY_N_EMAILS,
+        "pause_min_minutes": config.PAUSE_MIN_MINUTES,
+        "pause_max_minutes": config.PAUSE_MAX_MINUTES,
+        "calendar_link": config.CALENDAR_LINK,
+        "license_key": config.LICENSE_KEY[:8] + "*" * 20 if config.LICENSE_KEY else None
+    }
 
 
 # Serve frontend

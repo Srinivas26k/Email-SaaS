@@ -1,214 +1,251 @@
-// Dashboard JavaScript - API Integration and Real-time Updates
+// Enterprise Outreach Dashboard - Multi-Page Application
 
 const API_BASE = '';
 let emailChart = null;
-let chartData = {
-    labels: [],
-    data: []
-};
+let statusChart = null;
+let timelineChart = null;
 let availableColumns = [];
 let currentFocusField = null;
 
-// Initialize dashboard
+// Current state
+let currentPage = 'dashboard';
+let currentLeadsFilter = 'all';
+let currentLeadsPage = 1;
+let currentLeadsSort = { by: 'id', order: 'desc' };
+let selectedLeadIds = [];
+
+// Initialize
 document.addEventListener('DOMContentLoaded', () => {
-    initChart();
+    initCharts();
     loadMetrics();
     loadLogs();
     loadTemplates();
     loadColumns();
 
-    // Update every 5 seconds
+    // Auto-refresh
     setInterval(loadMetrics, 5000);
-    setInterval(loadLogs, 10000);
+    setInterval(() => {
+        if (currentPage === 'dashboard') loadDashboardLogs();
+    }, 10000);
 
-    // Track focused input for variable insertion
+    // Track focused field for variable insertion
     document.addEventListener('focusin', (e) => {
-        if (e.target.classList.contains('template-input') ||
-            e.target.classList.contains('template-textarea')) {
+        if (e.target.classList.contains('input-field') ||
+            e.target.classList.contains('textarea-field')) {
             currentFocusField = e.target;
         }
     });
+
+    // Setup drag and drop
+    setupDragDrop();
+
+    // Hash navigation
+    const hash = window.location.hash.slice(1) || 'dashboard';
+    navigateTo(hash);
 });
 
-// Initialize Chart.js
-function initChart() {
-    const ctx = document.getElementById('emailChart').getContext('2d');
-    emailChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: chartData.labels,
-            datasets: [{
-                label: 'Emails Sent',
-                data: chartData.data,
-                borderColor: '#3b82f6',
-                backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                tension: 0.4,
-                fill: true
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-                legend: {
-                    display: false
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    grid: {
-                        color: 'rgba(255, 255, 255, 0.1)'
-                    },
-                    ticks: {
-                        color: '#a1a1aa'
-                    }
-                },
-                x: {
-                    grid: {
-                        color: 'rgba(255, 255, 255, 0.1)'
-                    },
-                    ticks: {
-                        color: '#a1a1aa'
-                    }
-                }
-            }
-        }
-    });
+// ============ NAVIGATION ============
+
+function navigateTo(page) {
+    // Hide all pages
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+
+    // Remove active from nav items
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+
+    // Show selected page
+    const pageElement = document.getElementById(`${page}-page`);
+    if (pageElement) {
+        pageElement.classList.add('active');
+        currentPage = page;
+
+        // Update nav
+        document.querySelector(`a[href="#${page}"]`)?.classList.add('active');
+
+        // Update URL
+        window.location.hash = page;
+
+        // Load page-specific data
+        loadPageData(page);
+    }
 }
 
-// Load metrics from API
+function loadPageData(page) {
+    switch (page) {
+        case 'dashboard':
+            loadDashboardLogs();
+            break;
+        case 'leads':
+            loadLeads();
+            break;
+        case 'analytics':
+            loadAnalytics();
+            break;
+        case 'templates':
+            // Already loaded
+            break;
+        case 'settings':
+            loadSettings();
+            break;
+    }
+}
+
+// ============ CHARTS ============
+
+function initCharts() {
+    // Email timeline chart (dashboard/analytics)
+    const ctx1 = document.getElementById('emailChart');
+    if (ctx1) {
+        emailChart = new Chart(ctx1.getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Emails Sent',
+                    data: [],
+                    borderColor: '#1976D2',
+                    backgroundColor: 'rgba(25, 118, 210, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: { legend: { display: false } }
+            }
+        });
+    }
+
+    // Timeline chart for analytics
+    const ctx2 = document.getElementById('timelineChart');
+    if (ctx2) {
+        timelineChart = new Chart(ctx2.getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Sent',
+                    data: [],
+                    borderColor: '#1976D2',
+                    backgroundColor: 'rgba(25, 118, 210, 0.1)',
+                    fill: true
+                }, {
+                    label: 'Replied',
+                    data: [],
+                    borderColor: '#4CAF50',
+                    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true
+            }
+        });
+    }
+
+    // Status pie chart
+    const ctx3 = document.getElementById('statusChart');
+    if (ctx3) {
+        statusChart = new Chart(ctx3.getContext('2d'), {
+            type: 'doughnut',
+            data: {
+                labels: ['Pending', 'Sent', 'Replied', 'Failed'],
+                datasets: [{
+                    data: [0, 0, 0, 0],
+                    backgroundColor: ['#FF9800', '#1976D2', '#4CAF50', '#F44336']
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true
+            }
+        });
+    }
+}
+
+// ============ DASHBOARD ============
+
 async function loadMetrics() {
     try {
         const response = await fetch(`${API_BASE}/api/metrics`);
         const data = await response.json();
 
-        // Update metric cards
-        document.getElementById('sentToday').textContent =
-            `${data.sent_today} / ${data.daily_limit}`;
+        document.getElementById('sentToday').textContent = `${data.sent_today} / ${data.daily_limit}`;
         document.getElementById('replies').textContent = data.replies;
         document.getElementById('failed').textContent = data.failed;
 
-        // Update campaign status badge
         const statusBadge = document.getElementById('campaignStatus');
         statusBadge.textContent = data.campaign_status;
         statusBadge.style.backgroundColor = getStatusBGColor(data.campaign_status);
         statusBadge.style.color = getStatusTextColor(data.campaign_status);
 
-        // Update progress bar
         const percentage = (data.sent_today / data.daily_limit) * 100;
         document.getElementById('progressFill').style.width = `${percentage}%`;
         document.getElementById('progressPercent').textContent = `${Math.round(percentage)}%`;
-
-        // Update chart
-        updateChart(data.sent_today);
 
     } catch (error) {
         console.error('Failed to load metrics:', error);
     }
 }
 
-// Load logs from API
-async function loadLogs() {
+async function loadDashboardLogs() {
     try {
-        const response = await fetch(`${API_BASE}/api/logs?limit=50`);
+        const response = await fetch(`${API_BASE}/api/logs?limit=10`);
         const data = await response.json();
 
-        const logsContainer = document.getElementById('logsContainer');
-
-        if (data.logs.length === 0) {
-            logsContainer.innerHTML = '<p class="no-logs">No logs yet</p>';
-            return;
+        const container = document.getElementById('dashboardLogsContainer');
+        if (data.logs && data.logs.length > 0) {
+            container.innerHTML = data.logs.map(log => `
+                <div class="log-entry">
+                    <span class="log-event">${escapeHtml(log.event)}</span>
+                    <span class="log-timestamp">${formatTimeAgo(log.timestamp)}</span>
+                </div>
+            `).join('');
+        } else {
+            container.innerHTML = '<p class="no-data">No activity yet</p>';
         }
-
-        logsContainer.innerHTML = data.logs.map(log => `
-            <div class="log-entry">
-                <span class="log-event">${escapeHtml(log.event)}</span>
-                <span class="log-timestamp">${formatTimestamp(log.timestamp)}</span>
-            </div>
-        `).join('');
-
     } catch (error) {
         console.error('Failed to load logs:', error);
     }
 }
 
-// Update chart with new data
-function updateChart(sentToday) {
-    const now = new Date();
-    const timeLabel = `${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}`;
-
-    // Add new data point
-    chartData.labels.push(timeLabel);
-    chartData.data.push(sentToday);
-
-    // Keep last 20 data points
-    if (chartData.labels.length > 20) {
-        chartData.labels.shift();
-        chartData.data.shift();
-    }
-
-    // Update chart
-    if (emailChart) {
-        emailChart.data.labels = chartData.labels;
-        emailChart.data.datasets[0].data = chartData.data;
-        emailChart.update('none'); // Update without animation for performance
-    }
-}
-
-// Campaign control functions
+// Campaign controls
 async function startCampaign() {
     try {
-        const response = await fetch(`${API_BASE}/api/campaign/start`, {
-            method: 'POST'
-        });
+        const response = await fetch(`${API_BASE}/api/campaign/start`, { method: 'POST' });
         const data = await response.json();
-
-        if (data.success) {
-            showNotification('Campaign started!', 'success');
-            loadMetrics();
-        }
+        showNotification(data.message, 'success');
+        loadMetrics();
     } catch (error) {
         showNotification('Failed to start campaign', 'error');
-        console.error(error);
     }
 }
 
 async function pauseCampaign() {
     try {
-        const response = await fetch(`${API_BASE}/api/campaign/pause`, {
-            method: 'POST'
-        });
+        const response = await fetch(`${API_BASE}/api/campaign/pause`, { method: 'POST' });
         const data = await response.json();
-
-        if (data.success) {
-            showNotification('Campaign paused', 'warning');
-            loadMetrics();
-        }
+        showNotification(data.message, 'success');
+        loadMetrics();
     } catch (error) {
         showNotification('Failed to pause campaign', 'error');
-        console.error(error);
     }
 }
 
 async function stopCampaign() {
     try {
-        const response = await fetch(`${API_BASE}/api/campaign/stop`, {
-            method: 'POST'
-        });
+        const response = await fetch(`${API_BASE}/api/campaign/stop`, { method: 'POST' });
         const data = await response.json();
-
-        if (data.success) {
-            showNotification('Campaign stopped', 'error');
-            loadMetrics();
-        }
+        showNotification(data.message, 'success');
+        loadMetrics();
     } catch (error) {
         showNotification('Failed to stop campaign', 'error');
-        console.error(error);
     }
 }
 
-// Upload leads
+// Upload
 async function uploadLeads() {
     const fileInput = document.getElementById('csvFile');
     const file = fileInput.files[0];
@@ -218,107 +255,281 @@ async function uploadLeads() {
         return;
     }
 
+    // Validate file type
+    if (!file.name.endsWith('.csv')) {
+        showNotification('Please select a CSV file', 'error');
+        return;
+    }
+
+    console.log('Uploading file:', file.name, 'Size:', file.size, 'bytes');
+
     const formData = new FormData();
     formData.append('file', file);
 
     try {
+        showNotification('Uploading...', 'info');
+        
         const response = await fetch(`${API_BASE}/api/upload-leads`, {
             method: 'POST',
             body: formData
         });
 
+        console.log('Response status:', response.status);
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Upload error:', errorText);
+            throw new Error(`Upload failed: ${response.status} ${response.statusText}`);
+        }
+
         const data = await response.json();
+        console.log('Upload response:', data);
 
         if (data.success) {
             showNotification(data.message, 'success');
             fileInput.value = '';
             loadMetrics();
 
-            // Display available columns
             if (data.columns && data.columns.length > 0) {
                 availableColumns = data.columns.filter(col => col !== 'email');
                 displayColumns(availableColumns);
-                document.getElementById('templateSection').style.display = 'block';
             }
         } else {
-            showNotification('Upload failed', 'error');
+            showNotification('Upload failed: ' + (data.detail || 'Unknown error'), 'error');
         }
     } catch (error) {
+        console.error('Upload error:', error);
         showNotification('Upload failed: ' + error.message, 'error');
-        console.error(error);
     }
 }
 
-// Display available columns
+// ============ LEADS MANAGEMENT ============
+
+async function loadLeads() {
+    try {
+        const params = new URLSearchParams({
+            page: currentLeadsPage,
+            limit: 50,
+            status: currentLeadsFilter,
+            sort_by: currentLeadsSort.by,
+            sort_order: currentLeadsSort.order
+        });
+
+        const search = document.getElementById('leadSearch')?.value;
+        if (search) params.append('search', search);
+
+        const response = await fetch(`${API_BASE}/api/leads?${params}`);
+        const data = await response.json();
+
+        renderLeadsTable(data.leads);
+        renderPagination(data.page, data.pages);
+
+    } catch (error) {
+        console.error('Failed to load leads:', error);
+        document.getElementById('leadsTableBody').innerHTML =
+            '<tr><td colspan="8" class="no-data">Failed to load leads</td></tr>';
+    }
+}
+
+function renderLeadsTable(leads) {
+    const tbody = document.getElementById('leadsTableBody');
+
+    if (!leads || leads.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="no-data">No leads found</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = leads.map(lead => `
+        <tr>
+            <td><input type="checkbox" class="lead-checkbox" value="${lead.id}"></td>
+            <td>${escapeHtml(lead.email)}</td>
+            <td>${escapeHtml(lead.data.name || lead.data.first_name || '-')}</td>
+            <td>${escapeHtml(lead.data.company || '-')}</td>
+            <td><span class="status-pill status-${lead.status.toLowerCase()}">${lead.status}</span></td>
+            <td>${lead.last_sent_at ? formatDate(lead.last_sent_at) : '-'}</td>
+            <td>${lead.followup_count}</td>
+            <td>
+                <button class="action-btn action-delete" onclick="deleteLead(${lead.id})">Delete</button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function renderPagination(current, total) {
+    const container = document.getElementById('leadsPagination');
+    if (total <= 1) {
+        container.innerHTML = '';
+        return;
+    }
+
+    let html = '';
+    if (current > 1) {
+        html += `<button class="page-btn" onclick="goToPage(${current - 1})">← Prev</button>`;
+    }
+
+    for (let i = 1; i <= Math.min(total, 5); i++) {
+        const active = i === current ? 'active' : '';
+        html += `<button class="page-btn ${active}" onclick="goToPage(${i})">${i}</button>`;
+    }
+
+    if (current < total) {
+        html += `<button class="page-btn" onclick="goToPage(${current + 1})">Next →</button>`;
+    }
+
+    container.innerHTML = html;
+}
+
+function filterLeads(status) {
+    currentLeadsFilter = status;
+    currentLeadsPage = 1;
+
+    document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+    event.target.classList.add('active');
+
+    loadLeads();
+}
+
+function searchLeads() {
+    currentLeadsPage = 1;
+    loadLeads();
+}
+
+function sortLeads(column) {
+    if (currentLeadsSort.by === column) {
+        currentLeadsSort.order = currentLeadsSort.order === 'asc' ? 'desc' : 'asc';
+    } else {
+        currentLeadsSort.by = column;
+        currentLeadsSort.order = 'desc';
+    }
+    loadLeads();
+}
+
+function goToPage(page) {
+    currentLeadsPage = page;
+    loadLeads();
+}
+
+async function deleteLead(id) {
+    if (!confirm('Are you sure you want to delete this lead?')) return;
+
+    try {
+        const response = await fetch(`${API_BASE}/api/leads/${id}`, { method: 'DELETE' });
+        const data = await response.json();
+
+        if (data.success) {
+            showNotification('Lead deleted', 'success');
+            loadLeads();
+            loadMetrics();
+        } else {
+            showNotification('Failed to delete lead', 'error');
+        }
+    } catch (error) {
+        showNotification('Error: ' + error.message, 'error');
+    }
+}
+
+function toggleSelectAll() {
+    const checked = document.getElementById('selectAll').checked;
+    document.querySelectorAll('.lead-checkbox').forEach(cb => cb.checked = checked);
+}
+
+// ============ ANALYTICS ============
+
+async function loadAnalytics() {
+    try {
+        const response = await fetch(`${API_BASE}/api/analytics`);
+        const data = await response.json();
+
+        // Update stats
+        document.getElementById('analyticsTotal').textContent = data.total_leads;
+        document.getElementById('analyticsReplyRate').textContent = `${data.reply_rate}%`;
+        document.getElementById('analyticsFailureRate').textContent = `${data.failure_rate}%`;
+
+        // Update status chart
+        if (statusChart) {
+            statusChart.data.datasets[0].data = [
+                data.status_distribution.pending,
+                data.status_distribution.sent,
+                data.status_distribution.replied,
+                data.status_distribution.failed
+            ];
+            statusChart.update();
+        }
+
+        // Update timeline chart
+        if (timelineChart && data.daily_stats) {
+            timelineChart.data.labels = data.daily_stats.map(d => d.date);
+            timelineChart.data.datasets[0].data = data.daily_stats.map(d => d.sent);
+            timelineChart.data.datasets[1].data = data.daily_stats.map(d => d.replied);
+            timelineChart.update();
+        }
+
+    } catch (error) {
+        console.error('Failed to load analytics:', error);
+    }
+}
+
+// ============ TEMPLATES ============
+
 function displayColumns(columns) {
-    const container = document.getElementById('columnsContainer');
+    const container = document.getElementById('variablesContainer');
+
+    if (!container) return;
 
     if (columns.length === 0) {
-        container.innerHTML = '<p class="no-columns">No columns detected</p>';
+        container.innerHTML = '<p class="no-data">Upload CSV to see available columns</p>';
         return;
     }
 
     container.innerHTML = columns.map(col =>
-        `<button class="column-tag" onclick="insertVariable('${col}')">${col}</button>`
+        `<button class="variable-tag" onclick="insertVariable('${col}')">{{${col}}}</button>`
     ).join('');
+
+    ['initial', 'followup1', 'followup2'].forEach(type => {
+        const inlineContainer = document.getElementById(`${type}Variables`);
+        if (inlineContainer) {
+            inlineContainer.innerHTML = columns.map(col =>
+                `<button class="inline-var" onclick="insertVariableInto('${type}Body', '${col}')">{{${col}}}</button>`
+            ).join('');
+        }
+    });
 }
 
-// Insert variable into focused field
 function insertVariable(columnName) {
-    if (!currentFocusField) {
-        // Try to find last focused field or default to initial body
-        currentFocusField = document.getElementById('initialBody');
-    }
+    if (!currentFocusField) return;
+    insertVariableInto(currentFocusField.id, columnName);
+}
+
+function insertVariableInto(fieldId, columnName) {
+    const field = document.getElementById(fieldId);
+    if (!field) return;
 
     const variable = `{{${columnName}}}`;
-    const start = currentFocusField.selectionStart;
-    const end = currentFocusField.selectionEnd;
-    const text = currentFocusField.value;
+    const start = field.selectionStart || 0;
+    const end = field.selectionEnd || 0;
+    const text = field.value;
 
-    currentFocusField.value = text.substring(0, start) + variable + text.substring(end);
+    field.value = text.substring(0, start) + variable + text.substring(end);
 
-    // Move cursor after inserted variable
     const newPos = start + variable.length;
-    currentFocusField.setSelectionRange(newPos, newPos);
-    currentFocusField.focus();
+    field.setSelectionRange(newPos, newPos);
+    field.focus();
 }
 
-// Load available columns
-async function loadColumns() {
-    try {
-        const response = await fetch(`${API_BASE}/api/columns`);
-        const data = await response.json();
-
-        if (data.columns && data.columns.length > 0) {
-            availableColumns = data.columns.filter(col => col !== 'email');
-            displayColumns(availableColumns);
-            document.getElementById('templateSection').style.display = 'block';
-        }
-    } catch (error) {
-        console.error('Failed to load columns:', error);
-    }
-}
-
-// Load templates
 async function loadTemplates() {
     try {
         const response = await fetch(`${API_BASE}/api/templates`);
         const data = await response.json();
 
         if (data.templates) {
-            // Load initial template
             if (data.templates.initial) {
                 document.getElementById('initialSubject').value = data.templates.initial.subject;
                 document.getElementById('initialBody').value = data.templates.initial.body;
             }
-
-            // Load followup1 template
             if (data.templates.followup1) {
                 document.getElementById('followup1Subject').value = data.templates.followup1.subject;
                 document.getElementById('followup1Body').value = data.templates.followup1.body;
             }
-
-            // Load followup2 template
             if (data.templates.followup2) {
                 document.getElementById('followup2Subject').value = data.templates.followup2.subject;
                 document.getElementById('followup2Body').value = data.templates.followup2.body;
@@ -329,7 +540,6 @@ async function loadTemplates() {
     }
 }
 
-// Save templates
 async function saveTemplates() {
     const templates = {
         initial: {
@@ -346,18 +556,10 @@ async function saveTemplates() {
         }
     };
 
-    // Validate templates are not empty
-    if (!templates.initial.subject || !templates.initial.body) {
-        showNotification('Initial email subject and body are required', 'warning');
-        return;
-    }
-
     try {
         const response = await fetch(`${API_BASE}/api/templates/save`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(templates)
         });
 
@@ -365,25 +567,103 @@ async function saveTemplates() {
 
         if (data.success) {
             showNotification('Templates saved successfully!', 'success');
-            loadLogs(); // Refresh logs to show the save event
         } else {
             showNotification('Failed to save templates', 'error');
         }
     } catch (error) {
         showNotification('Error: ' + error.message, 'error');
-        console.error(error);
     }
 }
 
-// Utility functions
-function getStatusColor(status) {
-    const colors = {
-        'RUNNING': '#10b981',
-        'PAUSED': '#f59e0b',
-        'STOPPED': '#ef4444',
-        'COMPLETED': '#3b82f6'
-    };
-    return colors[status] || '#a1a1aa';
+async function loadColumns() {
+    try {
+        const response = await fetch(`${API_BASE}/api/columns`);
+        const data = await response.json();
+
+        if (data.columns && data.columns.length > 0) {
+            availableColumns = data.columns.filter(col => col !== 'email');
+            displayColumns(availableColumns);
+        }
+    } catch (error) {
+        console.error('Failed to load columns:', error);
+    }
+}
+
+// ============ SETTINGS ============
+
+async function loadSettings() {
+    try {
+        const response = await fetch(`${API_BASE}/api/settings`);
+        const data = await response.json();
+
+        document.getElementById('settingsEmail').value = data.email || '';
+        document.getElementById('settingsSMTP').value = `${data.smtp_server}:${data.smtp_port}` || '';
+        document.getElementById('settingsCalendar').value = data.calendar_link || '';
+        document.getElementById('settingsDailyLimit').value = data.daily_limit || '';
+        document.getElementById('settingsDelay').value = `${data.min_delay}-${data.max_delay}` || '';
+        document.getElementById('settingsPauseEvery').value = data.pause_every_n || '';
+        document.getElementById('settingsLicense').value = data.license_key || '';
+
+    } catch (error) {
+        console.error('Failed to load settings:', error);
+    }
+}
+
+// ============ UTILITIES ============
+
+function setupDragDrop() {
+    const uploadArea = document.getElementById('uploadArea');
+    const fileInput = document.getElementById('csvFile');
+
+    if (!uploadArea || !fileInput) return;
+
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        uploadArea.addEventListener(eventName, e => {
+            e.preventDefault();
+            e.stopPropagation();
+        }, false);
+    });
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+        uploadArea.addEventListener(eventName, () => {
+            uploadArea.style.borderColor = '#1976D2';
+        }, false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+        uploadArea.addEventListener(eventName, () => {
+            uploadArea.style.borderColor = '';
+        }, false);
+    });
+
+    uploadArea.addEventListener('drop', (e) => {
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            fileInput.files = files;
+            uploadLeads();
+        }
+    }, false);
+
+    // Add click handlers
+    const browseLink = uploadArea.querySelector('.browse-link');
+    if (browseLink) {
+        browseLink.addEventListener('click', (e) => {
+            e.stopPropagation();
+            fileInput.click();
+        });
+    }
+
+    // Upload area click
+    uploadArea.addEventListener('click', () => {
+        fileInput.click();
+    });
+
+    // File input change
+    fileInput.addEventListener('change', () => {
+        if (fileInput.files.length > 0) {
+            uploadLeads();
+        }
+    });
 }
 
 function getStatusBGColor(status) {
@@ -406,9 +686,24 @@ function getStatusTextColor(status) {
     return colors[status] || '#666666';
 }
 
-function formatTimestamp(timestamp) {
-    const date = new Date(timestamp);
-    return date.toLocaleString();
+function formatDate(isoString) {
+    const date = new Date(isoString);
+    return date.toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+}
+
+function formatTimeAgo(isoString) {
+    const date = new Date(isoString);
+    const seconds = Math.floor((new Date() - date) / 1000);
+
+    if (seconds < 60) return 'Just now';
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+    return `${Math.floor(seconds / 86400)}d ago`;
 }
 
 function escapeHtml(text) {
@@ -418,65 +713,29 @@ function escapeHtml(text) {
 }
 
 function showNotification(message, type) {
-    // Simple console notification for now
-    // You can enhance this with a toast notification library
-    console.log(`[${type.toUpperCase()}] ${message}`);
-    alert(message);
-}
-
-// Setup drag and drop
-function setupDragDrop() {
-    const uploadArea = document.getElementById('uploadArea');
-    const fileInput = document.getElementById('csvFile');
-
-    if (!uploadArea || !fileInput) return;
-
-    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-        uploadArea.addEventListener(eventName, preventDefaults, false);
-    });
-
-    function preventDefaults(e) {
-        e.preventDefault();
-        e.stopPropagation();
-    }
-
-    ['dragenter', 'dragover'].forEach(eventName => {
-        uploadArea.addEventListener(eventName, () => {
-            uploadArea.style.borderColor = '#1976D2';
-        }, false);
-    });
-
-    ['dragleave', 'drop'].forEach(eventName => {
-        uploadArea.addEventListener(eventName, () => {
-            uploadArea.style.borderColor = '';
-        }, false);
-    });
-
-    uploadArea.addEventListener('drop', (e) => {
-        const dt = e.dataTransfer;
-        const files = dt.files;
-
-        if (files.length > 0) {
-            fileInput.files = files;
-            uploadLeads();
-        }
-    }, false);
-}
-
-// Insert variable into specific field
-function insertVariableInto(fieldId, columnName) {
-    const field = document.getElementById(fieldId);
-    if (!field) return;
-
-    const variable = `{{${columnName}}}`;
-    const start = field.selectionStart || 0;
-    const end = field.selectionEnd || 0;
-    const text = field.value;
-
-    field.value = text.substring(0, start) + variable + text.substring(end);
-
-    // Move cursor after inserted variable
-    const newPos = start + variable.length;
-    field.setSelectionRange(newPos, newPos);
-    field.focus();
+    // Create notification element
+    const notification = document.createElement('div');
+    notification.className = `notification notification-${type}`;
+    notification.textContent = message;
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 15px 20px;
+        background: ${type === 'success' ? '#4CAF50' : type === 'error' ? '#F44336' : type === 'warning' ? '#FF9800' : '#2196F3'};
+        color: white;
+        border-radius: 4px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        z-index: 10000;
+        max-width: 400px;
+        animation: slideIn 0.3s ease-out;
+    `;
+    
+    document.body.appendChild(notification);
+    
+    // Auto remove after 4 seconds
+    setTimeout(() => {
+        notification.style.animation = 'slideOut 0.3s ease-out';
+        setTimeout(() => notification.remove(), 300);
+    }, 4000);
 }
