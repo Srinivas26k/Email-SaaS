@@ -290,16 +290,24 @@ h3 {
     padding: 2rem;
     text-align: center;
     cursor: pointer;
-    transition: border-color 0.2s;
+    transition: all 0.2s;
+    background-color: #fafafa;
 }
 
 .upload-area:hover {
-    border-color: #999;
+    border-color: #1976D2;
+    background-color: #f0f8ff;
 }
 
 .upload-area p {
     color: var(--text-gray);
     font-size: 0.9rem;
+    margin: 0;
+}
+
+.upload-hint {
+    margin-top: 10px !important;
+    font-size: 14px !important;
 }
 
 .browse-link {

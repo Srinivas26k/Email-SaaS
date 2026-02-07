@@ -95,8 +95,9 @@
                     <h2>Upload Leads</h2>
                     <div class="upload-box">
                         <div class="upload-area" id="uploadArea">
-                            <p>Drag and drop CSV file here, or <span class="browse-link">Browse...</span></p>
+                            <p>📁 Drag and drop CSV file here, or click to browse</p>
                             <input type="file" id="csvFile" accept=".csv" style="display: none;">
+                            <p class="upload-hint" id="uploadHint" style="margin-top: 10px; color: #666; font-size: 14px;"></p>
                         </div>
                         <button class="btn btn-upload" onclick="uploadLeads()">📤 UPLOAD CSV</button>
                     </div>

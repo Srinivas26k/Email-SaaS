@@ -18,7 +18,7 @@ let selectedLeadIds = [];
 document.addEventListener('DOMContentLoaded', () => {
     initCharts();
     loadMetrics();
-    loadLogs();
+    loadDashboardLogs();
     loadTemplates();
     loadColumns();
 
@@ -250,8 +250,12 @@ async function uploadLeads() {
     const fileInput = document.getElementById('csvFile');
     const file = fileInput.files[0];
 
+    console.log('uploadLeads called, file:', file);
+
     if (!file) {
-        showNotification('Please select a CSV file', 'warning');
+        console.log('No file selected, opening file picker');
+        // If no file selected, open the file picker
+        fileInput.click();
         return;
     }
 
@@ -615,8 +619,14 @@ function setupDragDrop() {
     const uploadArea = document.getElementById('uploadArea');
     const fileInput = document.getElementById('csvFile');
 
-    if (!uploadArea || !fileInput) return;
+    if (!uploadArea || !fileInput) {
+        console.error('Upload area or file input not found!');
+        return;
+    }
 
+    console.log('✓ Setting up drag and drop...');
+
+    // Prevent default drag behaviors
     ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
         uploadArea.addEventListener(eventName, e => {
             e.preventDefault();
@@ -624,46 +634,68 @@ function setupDragDrop() {
         }, false);
     });
 
+    // Highlight drop area when item is dragged over it
     ['dragenter', 'dragover'].forEach(eventName => {
         uploadArea.addEventListener(eventName, () => {
             uploadArea.style.borderColor = '#1976D2';
+            uploadArea.style.backgroundColor = '#f0f8ff';
         }, false);
     });
 
     ['dragleave', 'drop'].forEach(eventName => {
         uploadArea.addEventListener(eventName, () => {
             uploadArea.style.borderColor = '';
+            uploadArea.style.backgroundColor = '';
         }, false);
     });
 
+    // Handle dropped files
     uploadArea.addEventListener('drop', (e) => {
+        console.log('📁 File dropped');
         const files = e.dataTransfer.files;
         if (files.length > 0) {
             fileInput.files = files;
+            console.log('File set:', files[0].name);
+            
+            // Show selected file
+            const hint = document.getElementById('uploadHint');
+            if (hint) {
+                hint.textContent = `✓ Selected: ${files[0].name}`;
+                hint.style.color = '#4CAF50';
+                hint.style.fontWeight = 'bold';
+            }
+            
             uploadLeads();
         }
     }, false);
 
-    // Add click handlers
-    const browseLink = uploadArea.querySelector('.browse-link');
-    if (browseLink) {
-        browseLink.addEventListener('click', (e) => {
-            e.stopPropagation();
-            fileInput.click();
-        });
-    }
-
-    // Upload area click
-    uploadArea.addEventListener('click', () => {
+    // Click handler for entire upload area - opens file picker
+    uploadArea.addEventListener('click', (e) => {
+        console.log('📁 Upload area clicked - opening file picker');
         fileInput.click();
     });
 
-    // File input change
+    // File input change handler
     fileInput.addEventListener('change', () => {
+        console.log('File input changed');
         if (fileInput.files.length > 0) {
+            const fileName = fileInput.files[0].name;
+            console.log('File selected:', fileName);
+            
+            // Show selected file name
+            const hint = document.getElementById('uploadHint');
+            if (hint) {
+                hint.textContent = `✓ Selected: ${fileName}`;
+                hint.style.color = '#4CAF50';
+                hint.style.fontWeight = 'bold';
+            }
+            
+            // Auto-upload after selection
             uploadLeads();
         }
     });
+    
+    console.log('✓ Drag and drop setup complete');
 }
 
 function getStatusBGColor(status) {
