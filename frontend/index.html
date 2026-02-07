@@ -4,36 +4,36 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Email Outreach System - Dashboard</title>
+    <title>Enterprise Outreach Dashboard</title>
     <link rel="stylesheet" href="/static/styles.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 
 <body>
     <div class="container">
         <!-- Header -->
         <header class="header">
-            <h1>📧 Email Outreach System</h1>
-            <p class="subtitle">Private, Reliable, 24/7 Email Automation</p>
+            <h1>Enterprise Outreach Dashboard</h1>
+            <p class="subtitle">Your dedicated 24/7 outreach engine</p>
         </header>
 
         <!-- Metrics Cards -->
         <div class="metrics-grid">
             <div class="metric-card">
-                <div class="metric-label">Sent Today</div>
+                <div class="metric-label">SENT TODAY:</div>
                 <div class="metric-value" id="sentToday">0 / 500</div>
             </div>
             <div class="metric-card">
-                <div class="metric-label">Replies</div>
+                <div class="metric-label">REPLIES:</div>
                 <div class="metric-value" id="replies">0</div>
             </div>
             <div class="metric-card">
-                <div class="metric-label">Failed</div>
+                <div class="metric-label">FAILED:</div>
                 <div class="metric-value" id="failed">0</div>
             </div>
             <div class="metric-card status-card">
-                <div class="metric-label">Campaign Status</div>
-                <div class="metric-value" id="campaignStatus">STOPPED</div>
+                <div class="metric-label">CAMPAIGN STATUS</div>
+                <div class="status-badge" id="campaignStatus">Stopped</div>
             </div>
         </div>
 
@@ -48,85 +48,88 @@
             </div>
         </div>
 
-        <!-- Controls -->
-        <div class="controls-section">
-            <h2>Campaign Controls</h2>
-            <div class="button-group">
-                <button class="btn btn-success" onclick="startCampaign()">▶ Start</button>
-                <button class="btn btn-warning" onclick="pauseCampaign()">⏸ Pause</button>
-                <button class="btn btn-danger" onclick="stopCampaign()">⏹ Stop</button>
+        <!-- Command Center -->
+        <div class="command-section">
+            <h2>Command Center</h2>
+            <div class="button-grid">
+                <button class="btn btn-start" onclick="startCampaign()">▶ START</button>
+                <button class="btn btn-pause" onclick="pauseCampaign()">⏸ PAUSE</button>
+                <button class="btn btn-stop" onclick="stopCampaign()">⏹ STOP</button>
             </div>
         </div>
 
-        <!-- Lead Upload -->
+        <!-- Upload Leads -->
         <div class="upload-section">
             <h2>Upload Leads</h2>
-            <div class="upload-area">
-                <input type="file" id="csvFile" accept=".csv" />
-                <button class="btn btn-primary" onclick="uploadLeads()">📤 Upload CSV</button>
+            <div class="upload-box">
+                <div class="upload-area" id="uploadArea">
+                    <p>Drag and drop CSV file here, or <span class="browse-link">Browse...</span></p>
+                    <input type="file" id="csvFile" accept=".csv" style="display: none;">
+                </div>
+                <button class="btn btn-upload" onclick="uploadLeads()">📤 UPLOAD CSV</button>
             </div>
-            <p class="upload-hint">CSV must contain: email (required), all other columns detected automatically</p>
         </div>
 
-        <!-- Template Editor -->
-        <div class="template-section" id="templateSection" style="display: none;">
-            <h2>📝 Email Templates</h2>
+        <!-- Email Editor -->
+        <div class="editor-section" id="editorSection" style="display: none;">
+            <h2>Email Editor</h2>
 
-            <!-- Available Columns -->
-            <div class="columns-display">
-                <h3>Available Variables (click to insert)</h3>
-                <div id="columnsContainer" class="columns-tags">
-                    <p class="no-columns">Upload CSV to see available columns</p>
-                </div>
+            <!-- Available Variables -->
+            <div class="variables-section">
+                <div id="variablesContainer" class="variables-tags"></div>
             </div>
 
-            <!-- Template Forms -->
-            <div class="template-forms">
+            <!-- Template Grid -->
+            <div class="template-grid">
                 <!-- Initial Email -->
-                <div class="template-card">
-                    <h3>📧 Initial Email</h3>
-                    <label>Subject:</label>
-                    <input type="text" id="initialSubject" class="template-input" placeholder="Subject line">
-                    <label>Body:</label>
-                    <textarea id="initialBody" class="template-textarea" rows="6"
-                        placeholder="Email body. Use {{column_name}} for variables."></textarea>
+                <div class="template-column">
+                    <h3>Initial Email</h3>
+                    <label>Subject to initial email</label>
+                    <input type="text" id="initialSubject" class="input-field" placeholder="Enter subject">
+                    <label>Body</label>
+                    <div id="initialVariables" class="inline-variables"></div>
+                    <textarea id="initialBody" class="textarea-field" rows="4"
+                        placeholder="Heroes your comment to {{company}}"></textarea>
                 </div>
 
                 <!-- Follow-up 1 -->
-                <div class="template-card">
-                    <h3>🔄 Follow-up 1 (after 3 days)</h3>
-                    <label>Subject:</label>
-                    <input type="text" id="followup1Subject" class="template-input" placeholder="Subject line">
-                    <label>Body:</label>
-                    <textarea id="followup1Body" class="template-textarea" rows="6"
-                        placeholder="First follow-up body"></textarea>
+                <div class="template-column">
+                    <h3>Follow-up 1 (after 3 days)</h3>
+                    <label>Subject to for your email</label>
+                    <input type="text" id="followup1Subject" class="input-field" placeholder="Enter subject">
+                    <label>Body</label>
+                    <div id="followup1Variables" class="inline-variables"></div>
+                    <textarea id="followup1Body" class="textarea-field" rows="4"
+                        placeholder="Heroes your content for {{company}}"></textarea>
                 </div>
 
                 <!-- Follow-up 2 -->
-                <div class="template-card">
-                    <h3>🔄 Follow-up 2 (after 6 days)</h3>
-                    <label>Subject:</label>
-                    <input type="text" id="followup2Subject" class="template-input" placeholder="Subject line">
-                    <label>Body:</label>
-                    <textarea id="followup2Body" class="template-textarea" rows="6"
-                        placeholder="Second follow-up body"></textarea>
+                <div class="template-column">
+                    <h3>Follow-up 2 (after 6 days)</h3>
+                    <label>Subject to free company 2</label>
+                    <input type="text" id="followup2Subject" class="input-field" placeholder="Enter subject">
+                    <label>Body</label>
+                    <div id="followup2Variables" class="inline-variables"></div>
+                    <textarea id="followup2Body" class="textarea-field" rows="4"
+                        placeholder="Videos your content to {{company}}"></textarea>
                 </div>
             </div>
 
-            <button class="btn btn-success btn-large" onclick="saveTemplates()">💾 Save Templates</button>
+            <button class="btn btn-save" onclick="saveTemplates()">SAVE TEMPLATES</button>
         </div>
 
-        <!-- Chart -->
-        <div class="chart-section">
-            <h2>Emails Sent Over Time</h2>
-            <canvas id="emailChart"></canvas>
-        </div>
+        <!-- Charts and Logs -->
+        <div class="bottom-grid">
+            <!-- Chart -->
+            <div class="chart-section">
+                <h2>Emails Sent Over Time</h2>
+                <canvas id="emailChart"></canvas>
+            </div>
 
-        <!-- Logs -->
-        <div class="logs-section">
-            <h2>Activity Logs</h2>
-            <div class="logs-container" id="logsContainer">
-                <p class="no-logs">No logs yet</p>
+            <!-- Activity Log -->
+            <div class="logs-section">
+                <h2>Activity Log</h2>
+                <div id="logsContainer" class="logs-container"></div>
             </div>
         </div>
     </div>

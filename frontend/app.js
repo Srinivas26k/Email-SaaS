@@ -88,7 +88,12 @@ async function loadMetrics() {
             `${data.sent_today} / ${data.daily_limit}`;
         document.getElementById('replies').textContent = data.replies;
         document.getElementById('failed').textContent = data.failed;
-        document.getElementById('campaignStatus').textContent = data.campaign_status;
+
+        // Update campaign status badge
+        const statusBadge = document.getElementById('campaignStatus');
+        statusBadge.textContent = data.campaign_status;
+        statusBadge.style.backgroundColor = getStatusBGColor(data.campaign_status);
+        statusBadge.style.color = getStatusTextColor(data.campaign_status);
 
         // Update progress bar
         const percentage = (data.sent_today / data.daily_limit) * 100;
@@ -97,10 +102,6 @@ async function loadMetrics() {
 
         // Update chart
         updateChart(data.sent_today);
-
-        // Update status card color
-        const statusCard = document.querySelector('.status-card .metric-value');
-        statusCard.style.color = getStatusColor(data.campaign_status);
 
     } catch (error) {
         console.error('Failed to load metrics:', error);
@@ -385,6 +386,26 @@ function getStatusColor(status) {
     return colors[status] || '#a1a1aa';
 }
 
+function getStatusBGColor(status) {
+    const colors = {
+        'RUNNING': '#90EE90',
+        'PAUSED': '#FFE082',
+        'STOPPED': '#FFCDD2',
+        'COMPLETED': '#BBDEFB'
+    };
+    return colors[status] || '#E0E0E0';
+}
+
+function getStatusTextColor(status) {
+    const colors = {
+        'RUNNING': '#2E7D32',
+        'PAUSED': '#F57C00',
+        'STOPPED': '#C62828',
+        'COMPLETED': '#1565C0'
+    };
+    return colors[status] || '#666666';
+}
+
 function formatTimestamp(timestamp) {
     const date = new Date(timestamp);
     return date.toLocaleString();
@@ -401,4 +422,61 @@ function showNotification(message, type) {
     // You can enhance this with a toast notification library
     console.log(`[${type.toUpperCase()}] ${message}`);
     alert(message);
+}
+
+// Setup drag and drop
+function setupDragDrop() {
+    const uploadArea = document.getElementById('uploadArea');
+    const fileInput = document.getElementById('csvFile');
+
+    if (!uploadArea || !fileInput) return;
+
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        uploadArea.addEventListener(eventName, preventDefaults, false);
+    });
+
+    function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+        uploadArea.addEventListener(eventName, () => {
+            uploadArea.style.borderColor = '#1976D2';
+        }, false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+        uploadArea.addEventListener(eventName, () => {
+            uploadArea.style.borderColor = '';
+        }, false);
+    });
+
+    uploadArea.addEventListener('drop', (e) => {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+
+        if (files.length > 0) {
+            fileInput.files = files;
+            uploadLeads();
+        }
+    }, false);
+}
+
+// Insert variable into specific field
+function insertVariableInto(fieldId, columnName) {
+    const field = document.getElementById(fieldId);
+    if (!field) return;
+
+    const variable = `{{${columnName}}}`;
+    const start = field.selectionStart || 0;
+    const end = field.selectionEnd || 0;
+    const text = field.value;
+
+    field.value = text.substring(0, start) + variable + text.substring(end);
+
+    // Move cursor after inserted variable
+    const newPos = start + variable.length;
+    field.setSelectionRange(newPos, newPos);
+    field.focus();
 }
