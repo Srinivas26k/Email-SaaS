@@ -124,24 +124,38 @@ class BackgroundWorker:
             
             # Determine email type
             if lead.followup_count == 0:
-                email_type = "initial"
+                template_type = "initial"
             elif lead.followup_count == 1:
-                email_type = "followup1"
+                template_type = "followup1"
             else:
-                email_type = "followup2"
+                template_type = "followup2"
             
-            # Get industry (default to healthcare if not specified)
-            industry = lead_data.get("industry", "healthcare")
+            # Get custom template from database
+            from backend.database import CustomTemplate
+            custom_template = session.query(CustomTemplate).filter(
+                CustomTemplate.template_type == template_type
+            ).first()
             
-            # Prepare template variables
-            variables = {
-                "first_name": lead_data.get("first_name", "there"),
-                "company": lead_data.get("company", "your company"),
-                "industry": industry
-            }
-            
-            # Render template
-            rendered = render_template(industry, email_type, variables)
+            if custom_template:
+                # Use custom template with flexible rendering
+                from backend.template_renderer import render_custom_template
+                
+                rendered = render_custom_template(
+                    custom_template.subject,
+                    custom_template.body,
+                    lead_data
+                )
+            else:
+                # Fallback to hardcoded templates for backwards compatibility
+                industry = lead_data.get("industry", "healthcare")
+                variables = {
+                    "first_name": lead_data.get("first_name", "there"),
+                    "company": lead_data.get("company", "your company"),
+                    "industry": industry
+                }
+                
+                # Use old template system
+                rendered = render_template(industry, template_type, variables)
             
             # Send email
             success = self.email_sender.send_email(
@@ -162,12 +176,12 @@ class BackgroundWorker:
                 # Log success
                 log = Log(
                     email=lead.email,
-                    event=f"Sent {email_type} email to {lead.email}"
+                    event=f"Sent {template_type} email to {lead.email}"
                 )
                 session.add(log)
                 session.commit()
                 
-                print(f"✅ Sent {email_type} to {lead.email} ({campaign.sent_today}/{config.DAILY_EMAIL_LIMIT})")
+                print(f"✅ Sent {template_type} to {lead.email} ({campaign.sent_today}/{config.DAILY_EMAIL_LIMIT})")
                 
             else:
                 # Mark as failed

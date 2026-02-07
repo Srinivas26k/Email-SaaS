@@ -47,6 +47,19 @@ class Campaign(Base):
     status = Column(Enum(CampaignStatus), default=CampaignStatus.STOPPED, nullable=False)
     sent_today = Column(Integer, default=0, nullable=False)
     last_reset_date = Column(String(10), nullable=True)  # Format: YYYY-MM-DD
+    available_columns = Column(Text, nullable=True)  # JSON string of CSV columns
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class CustomTemplate(Base):
+    """Custom email template model."""
+    __tablename__ = "custom_templates"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    template_type = Column(String(20), nullable=False)  # initial, followup1, followup2
+    subject = Column(String(500), nullable=False)
+    body = Column(Text, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 

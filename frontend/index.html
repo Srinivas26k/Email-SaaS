@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,6 +8,7 @@
     <link rel="stylesheet" href="/static/styles.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
+
 <body>
     <div class="container">
         <!-- Header -->
@@ -63,7 +65,55 @@
                 <input type="file" id="csvFile" accept=".csv" />
                 <button class="btn btn-primary" onclick="uploadLeads()">📤 Upload CSV</button>
             </div>
-            <p class="upload-hint">CSV must contain: email (required), first_name, company, industry (optional)</p>
+            <p class="upload-hint">CSV must contain: email (required), all other columns detected automatically</p>
+        </div>
+
+        <!-- Template Editor -->
+        <div class="template-section" id="templateSection" style="display: none;">
+            <h2>📝 Email Templates</h2>
+
+            <!-- Available Columns -->
+            <div class="columns-display">
+                <h3>Available Variables (click to insert)</h3>
+                <div id="columnsContainer" class="columns-tags">
+                    <p class="no-columns">Upload CSV to see available columns</p>
+                </div>
+            </div>
+
+            <!-- Template Forms -->
+            <div class="template-forms">
+                <!-- Initial Email -->
+                <div class="template-card">
+                    <h3>📧 Initial Email</h3>
+                    <label>Subject:</label>
+                    <input type="text" id="initialSubject" class="template-input" placeholder="Subject line">
+                    <label>Body:</label>
+                    <textarea id="initialBody" class="template-textarea" rows="6"
+                        placeholder="Email body. Use {{column_name}} for variables."></textarea>
+                </div>
+
+                <!-- Follow-up 1 -->
+                <div class="template-card">
+                    <h3>🔄 Follow-up 1 (after 3 days)</h3>
+                    <label>Subject:</label>
+                    <input type="text" id="followup1Subject" class="template-input" placeholder="Subject line">
+                    <label>Body:</label>
+                    <textarea id="followup1Body" class="template-textarea" rows="6"
+                        placeholder="First follow-up body"></textarea>
+                </div>
+
+                <!-- Follow-up 2 -->
+                <div class="template-card">
+                    <h3>🔄 Follow-up 2 (after 6 days)</h3>
+                    <label>Subject:</label>
+                    <input type="text" id="followup2Subject" class="template-input" placeholder="Subject line">
+                    <label>Body:</label>
+                    <textarea id="followup2Body" class="template-textarea" rows="6"
+                        placeholder="Second follow-up body"></textarea>
+                </div>
+            </div>
+
+            <button class="btn btn-success btn-large" onclick="saveTemplates()">💾 Save Templates</button>
         </div>
 
         <!-- Chart -->
@@ -83,4 +133,5 @@
 
     <script src="/static/app.js"></script>
 </body>
+
 </html>

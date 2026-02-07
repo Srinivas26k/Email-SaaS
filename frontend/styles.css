@@ -123,6 +123,7 @@ body {
 /* Sections */
 .controls-section,
 .upload-section,
+.template-section,
 .chart-section,
 .logs-section {
     background: var(--bg-card);
@@ -137,6 +138,110 @@ h2 {
     margin-bottom: 1rem;
     color: var(--text-primary);
 }
+
+h3 {
+    font-size: 1rem;
+    margin-bottom: 0.75rem;
+    color: var(--text-secondary);
+}
+
+/* Template Editor */
+.columns-display {
+    margin-bottom: 2rem;
+}
+
+.columns-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.column-tag {
+    background: var(--accent-primary);
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: 600;
+    transition: all 0.2s;
+    border: none;
+}
+
+.column-tag:hover {
+    background: var(--accent-success);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.no-columns {
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+.template-forms {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.template-card {
+    background: var(--bg-secondary);
+    padding: 1.5rem;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
+.template-card h3 {
+    margin-top: 0;
+    color: var(--text-primary);
+}
+
+.template-card label {
+    display: block;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    margin-bottom: 0.5rem;
+    margin-top: 1rem;
+}
+
+.template-card label:first-of-type {
+    margin-top: 0;
+}
+
+.template-input,
+.template-textarea {
+    width: 100%;
+    padding: 0.75rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    font-family: inherit;
+    resize: vertical;
+}
+
+.template-input:focus,
+.template-textarea:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+}
+
+.template-textarea {
+    line-height: 1.6;
+    font-family: 'Courier New', monospace;
+}
+
+.btn-large {
+    width: 100%;
+    padding: 1rem;
+    font-size: 1.1rem;
+}
+
+/* Sections */
 
 /* Buttons */
 .button-group {
