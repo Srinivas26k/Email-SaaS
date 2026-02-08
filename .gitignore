@@ -4,9 +4,6 @@ __pycache__/
 *$py.class
 *.so
 .Python
-env/
-venv/
-ENV/
 build/
 develop-eggs/
 dist/
@@ -23,15 +20,19 @@ wheels/
 .installed.cfg
 *.egg
 
-# Environment
+# Virtual Environment
+.venv/
+venv/
+ENV/
+env/
+
+# Environment variables
 .env
-.venv
 
 # Database
 *.db
 *.sqlite
 *.sqlite3
-email_system.db
 
 # IDE
 .vscode/
@@ -39,26 +40,14 @@ email_system.db
 *.swp
 *.swo
 *~
+
+# OS
 .DS_Store
+Thumbs.db
 
 # Logs
 *.log
-logs/
 
-# UV
-.uv/
-uv.lock
-
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
-
-# Temporary
-*.tmp
-*.temp
-.cache/
-
-
-
-test-docs
+# Test files
+test_*.py
+*_test.py
