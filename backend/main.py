@@ -1,10 +1,9 @@
-"""FastAPI main application with all endpoints."""
-import threading
+"""FastAPI main application with APScheduler for 24/7 parallel processing."""
 import json
 import pandas as pd
 from io import StringIO
 from datetime import datetime
-from typing import List, Optional
+from typing import Optional
 
 from fastapi import FastAPI, UploadFile, File, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,8 +14,7 @@ from sqlalchemy.orm import Session
 from backend.config import config
 from backend.database import init_db, get_db, Lead, Campaign, Log, LeadStatus, CampaignStatus
 from backend.license_validator import validate_on_startup
-from backend.background_worker import BackgroundWorker
-from backend.reply_checker import ReplyChecker
+from backend.scheduler import email_scheduler
 
 # Initialize FastAPI app
 app = FastAPI(title="Email Outreach System", version="1.0.0")
@@ -29,17 +27,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-# Background worker and reply checker
-background_worker: Optional[BackgroundWorker] = None
-reply_checker: Optional[ReplyChecker] = None
-reply_checker_thread: Optional[threading.Thread] = None
 
 
 @app.on_event("startup")
 async def startup_event():
     """Application startup tasks."""
-    global background_worker, reply_checker, reply_checker_thread
-    
     print("🚀 Starting Email Outreach System...")
     
     # Validate license (blocks startup if invalid)
@@ -49,27 +41,10 @@ async def startup_event():
     init_db()
     print("✅ Database initialized")
     
-    # Start background worker in a separate thread
-    background_worker = BackgroundWorker()
-    worker_thread = threading.Thread(target=background_worker.start, daemon=True)
-    worker_thread.start()
-    print("✅ Background worker started")
-    
-    # Start reply checker in a separate thread
-    reply_checker = ReplyChecker()
-    
-    def reply_checker_loop():
-        import time
-        while True:
-            try:
-                reply_checker.check_replies()
-            except Exception as e:
-                print(f"❌ Reply checker error: {str(e)}")
-            time.sleep(300)  # Check every 5 minutes
-    
-    reply_checker_thread = threading.Thread(target=reply_checker_loop, daemon=True)
-    reply_checker_thread.start()
-    print("✅ Reply checker started")
+    # Start APScheduler (handles ALL background tasks in parallel)
+    # This replaces the old threading approach
+    email_scheduler.start()
+    print("✅ Email scheduler started (sends emails + checks replies in parallel)")
     
     print("🎉 System ready!")
 
@@ -78,7 +53,8 @@ async def startup_event():
 async def shutdown_event():
     """Application shutdown tasks."""
     print("⏹️ Shutting down...")
-    print("✅ Shutdown complete")
+    email_scheduler.stop()
+    print("✅ Scheduler stopped gracefully")
 
 
 # ==================== HEALTH CHECK ====================
@@ -88,8 +64,8 @@ async def health_check():
     """Health check endpoint for monitoring."""
     return {
         "status": "healthy",
-        "background_worker_running": background_worker is not None,
-        "reply_checker_running": reply_checker is not None,
+        "scheduler_running": email_scheduler.running,
+        "scheduler_jobs": len(email_scheduler.scheduler.get_jobs()) if email_scheduler.running else 0,
         "timestamp": datetime.utcnow().isoformat()
     }
 
@@ -302,8 +278,8 @@ async def save_templates(
         # Delete existing templates
         db.query(CustomTemplate).delete()
         
-        # Save new templates
-        for template_type in ['initial', 'followup1', 'followup2']:
+        # Save new templates (including reply template)
+        for template_type in ['initial', 'followup1', 'followup2', 'reply']:
             if template_type in templates:
                 template_data = templates[template_type]
                 template = CustomTemplate(
@@ -523,8 +499,7 @@ async def get_analytics(
 ):
     """Get analytics data."""
     try:
-        from datetime import datetime, timedelta
-        from sqlalchemy import func, case
+        from datetime import timedelta
         
         # Parse dates
         if date_from:
@@ -556,13 +531,12 @@ async def get_analytics(
             "failed": total_failed
         }
         
-        # Daily stats (simplified - actual implementation would query logs)
+        # Daily stats
         daily_stats = []
         current_date = start_date
         while current_date <= end_date:
             date_str = current_date.strftime("%Y-%m-%d")
             
-            # Count emails sent on this day
             day_start = current_date.replace(hour=0, minute=0, second=0)
             day_end = current_date.replace(hour=23, minute=59, second=59)
             
@@ -621,6 +595,40 @@ async def get_settings():
         "calendar_link": config.CALENDAR_LINK,
         "license_key": config.LICENSE_KEY[:8] + "*" * 20 if config.LICENSE_KEY else None
     }
+
+
+# Daily Report APIs
+
+@app.post("/api/report/send")
+async def send_daily_report_now(email: str = None):
+    """Manually trigger daily report send."""
+    from backend.daily_report import DailyReportGenerator
+    
+    try:
+        generator = DailyReportGenerator()
+        success = generator.send_daily_report(email)
+        
+        if success:
+            return {"success": True, "message": f"Report sent to {email or config.EMAIL_ADDRESS}"}
+        else:
+            raise HTTPException(status_code=500, detail="Failed to send report")
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/report/preview")
+async def preview_daily_report():
+    """Get daily report data for preview."""
+    from backend.daily_report import DailyReportGenerator
+    
+    try:
+        generator = DailyReportGenerator()
+        report = generator.generate_report()
+        return report
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # Serve frontend

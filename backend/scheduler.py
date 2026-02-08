@@ -10,6 +10,7 @@ from backend.config import config
 from backend.database import SessionLocal, Lead, Campaign, Log, LeadStatus, CampaignStatus
 from backend.email_sender import EmailSender
 from backend.reply_checker import ReplyChecker
+from backend.daily_report import DailyReportGenerator
 from backend.template_renderer import render_custom_template
 import json
 
@@ -24,6 +25,7 @@ class EmailScheduler:
         self.scheduler = BackgroundScheduler()
         self.email_sender = EmailSender()
         self.reply_checker = ReplyChecker()
+        self.report_generator = DailyReportGenerator()
         self.running = False
     
     def start(self):
@@ -58,6 +60,17 @@ class EmailScheduler:
             minute=0,
             id='daily_reset',
             name='Reset daily email counter',
+            replace_existing=True
+        )
+        
+        # Task 4: Send daily report at midnight (1 AM)
+        self.scheduler.add_job(
+            func=self.send_daily_report,
+            trigger='cron',
+            hour=1,  # 1 AM
+            minute=0,
+            id='daily_report',
+            name='Send daily analytics report',
             replace_existing=True
         )
         
@@ -106,6 +119,14 @@ class EmailScheduler:
             self.reply_checker.check_replies()
         except Exception as e:
             logger.error(f"❌ Error checking replies: {str(e)}", exc_info=True)
+    
+    def send_daily_report(self):
+        """Send daily analytics report (runs at 1 AM)."""
+        try:
+            logger.info("📊 Generating and sending daily report...")
+            self.report_generator.send_daily_report()
+        except Exception as e:
+            logger.error(f"❌ Error sending daily report: {str(e)}", exc_info=True)
     
     def reset_daily_counter(self):
         """Reset daily email counter at midnight."""

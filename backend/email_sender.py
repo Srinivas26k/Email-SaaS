@@ -19,14 +19,15 @@ class EmailSender:
         self.email_password = config.EMAIL_PASSWORD
         self.emails_sent_in_session = 0
     
-    def send_email(self, to_email: str, subject: str, body: str) -> bool:
+    def send_email(self, to_email: str, subject: str, body: str, is_html: bool = False) -> bool:
         """
         Send email via SMTP.
         
         Args:
             to_email: Recipient email address
             subject: Email subject
-            body: Email body (plain text)
+            body: Email body (plain text or HTML)
+            is_html: If True, send as HTML email
             
         Returns:
             True if sent successfully, False otherwise
@@ -38,7 +39,11 @@ class EmailSender:
             msg['To'] = to_email
             msg['Subject'] = subject
             
-            msg.attach(MIMEText(body, 'plain'))
+            # Attach body as plain text or HTML
+            if is_html:
+                msg.attach(MIMEText(body, 'html'))
+            else:
+                msg.attach(MIMEText(body, 'plain'))
             
             # Connect and send
             with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
@@ -48,8 +53,9 @@ class EmailSender:
             
             self.emails_sent_in_session += 1
             
-            # Apply delay based on rate limiting rules
-            self._apply_rate_limit()
+            # Apply delay based on rate limiting rules (skip for reports)
+            if not is_html:  # Don't delay for HTML reports
+                self._apply_rate_limit()
             
             return True
             
