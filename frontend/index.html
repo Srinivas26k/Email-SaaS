@@ -243,6 +243,20 @@
                         <textarea id="followup2Body" class="textarea-field" rows="6"
                             placeholder="Second follow-up body"></textarea>
                     </div>
+
+                    <!-- Auto-Reply Template -->
+                    <div class="template-column">
+                        <h3>📅 Auto-Reply (when they respond)</h3>
+                        <label>Subject</label>
+                        <input type="text" id="replySubject" class="input-field" placeholder="Enter subject">
+                        <label>Body</label>
+                        <div id="replyVariables" class="inline-variables"></div>
+                        <textarea id="replyBody" class="textarea-field" rows="6"
+                            placeholder="Auto-reply with calendar link. Use {{calendar_link}} for your calendar."></textarea>
+                        <p style="font-size: 12px; color: #666; margin-top: 5px;">
+                            💡 Available: {{first_name}}, {{company}}, {{calendar_link}}, {{email}}, and any CSV columns
+                        </p>
+                    </div>
                 </div>
 
                 <button class="btn btn-save" onclick="saveTemplates()">💾 SAVE TEMPLATES</button>

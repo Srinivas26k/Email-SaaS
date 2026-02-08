@@ -29,7 +29,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 # Background worker and reply checker
 background_worker: Optional[BackgroundWorker] = None
 reply_checker: Optional[ReplyChecker] = None
@@ -73,6 +72,26 @@ async def startup_event():
     print("✅ Reply checker started")
     
     print("🎉 System ready!")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Application shutdown tasks."""
+    print("⏹️ Shutting down...")
+    print("✅ Shutdown complete")
+
+
+# ==================== HEALTH CHECK ====================
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for monitoring."""
+    return {
+        "status": "healthy",
+        "background_worker_running": background_worker is not None,
+        "reply_checker_running": reply_checker is not None,
+        "timestamp": datetime.utcnow().isoformat()
+    }
 
 
 # ==================== API ENDPOINTS ====================

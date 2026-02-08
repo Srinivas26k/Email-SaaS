@@ -38,12 +38,16 @@ class Config:
     # Calendar Link
     CALENDAR_LINK = os.getenv("CALENDAR_LINK", "https://calendly.com/your-link")
     
-    # Database
+    # Database - PostgreSQL for production, SQLite for local
     DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./email_system.db")
+    
+    # Fix for Railway/Render PostgreSQL URLs (postgres:// -> postgresql://)
+    if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
+        DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
     
     # API Configuration
     API_HOST = os.getenv("API_HOST", "0.0.0.0")
-    API_PORT = int(os.getenv("API_PORT", "8000"))
+    API_PORT = int(os.getenv("API_PORT", os.getenv("PORT", "8000")))  # Support Railway's PORT env
     
     @classmethod
     def validate(cls):

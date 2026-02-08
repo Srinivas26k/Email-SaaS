@@ -485,14 +485,18 @@ function displayColumns(columns) {
         return;
     }
 
-    container.innerHTML = columns.map(col =>
+    // Add special variables
+    const specialVars = ['calendar_link', 'email'];
+    const allVars = [...specialVars, ...columns];
+
+    container.innerHTML = allVars.map(col =>
         `<button class="variable-tag" onclick="insertVariable('${col}')">{{${col}}}</button>`
     ).join('');
 
-    ['initial', 'followup1', 'followup2'].forEach(type => {
+    ['initial', 'followup1', 'followup2', 'reply'].forEach(type => {
         const inlineContainer = document.getElementById(`${type}Variables`);
         if (inlineContainer) {
-            inlineContainer.innerHTML = columns.map(col =>
+            inlineContainer.innerHTML = allVars.map(col =>
                 `<button class="inline-var" onclick="insertVariableInto('${type}Body', '${col}')">{{${col}}}</button>`
             ).join('');
         }
@@ -538,6 +542,23 @@ async function loadTemplates() {
                 document.getElementById('followup2Subject').value = data.templates.followup2.subject;
                 document.getElementById('followup2Body').value = data.templates.followup2.body;
             }
+            if (data.templates.reply) {
+                document.getElementById('replySubject').value = data.templates.reply.subject;
+                document.getElementById('replyBody').value = data.templates.reply.body;
+            } else {
+                // Set default reply template
+                document.getElementById('replySubject').value = "Let's schedule a call!";
+                document.getElementById('replyBody').value = `Hi {{first_name}},
+
+Thanks for your reply! I'd love to connect with you.
+
+Please book a time that works best for you here:
+{{calendar_link}}
+
+Looking forward to our conversation!
+
+Best regards`;
+            }
         }
     } catch (error) {
         console.error('Failed to load templates:', error);
@@ -557,6 +578,10 @@ async function saveTemplates() {
         followup2: {
             subject: document.getElementById('followup2Subject').value,
             body: document.getElementById('followup2Body').value
+        },
+        reply: {
+            subject: document.getElementById('replySubject').value,
+            body: document.getElementById('replyBody').value
         }
     };
 

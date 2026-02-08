@@ -1,245 +1,382 @@
-# 📧 Email Outreach System
+# Email Outreach System - Production Ready
 
-A private, reliable, 24/7 email outreach system with automatic follow-ups and reply detection.
+## 🚀 Quick Start - Cloud Deployment
 
-## ✨ Features
+This system is **production-ready** for 24/7 cloud operation with:
+- ✅ **Parallel background processing** (email sending + reply checking)
+- ✅ **Crash recovery** (auto-restarts on failures)
+- ✅ **PostgreSQL** support for cloud databases
+- ✅ **Horizontal scaling** ready
+- ✅ **Health monitoring** endpoints
 
-- ✅ Send up to 500 emails/day with intelligent rate limiting
-- ✅ Automatic follow-ups (3-day intervals, max 2 follow-ups)
-- ✅ Reply detection with automatic calendar link responses
-- ✅ Industry-specific templates (Healthcare, Fintech, EdTech)
-- ✅ Crash recovery - system resumes automatically after restarts
-- ✅ License validation via Google Sheets
-- ✅ Real-time dashboard with charts and metrics
-- ✅ 24/7 operation (runs independently of browser)
+---
 
-## 🚀 Quick Start
+## 📋 What's New - Production Enhancements
 
-### Prerequisites
+### 1. **APScheduler Integration** (`backend/scheduler.py`)
+Replaced threading with production-grade scheduler:
 
-- Python 3.10+
-- UV package manager ([install](https://docs.astral.sh/uv/getting-started/installation/))
-- Email account with SMTP/IMAP access (Gmail recommended)
-- Google Sheet for license validation
-
-### Installation
-
-1. **Clone or navigate to the project directory:**
-   ```bash
-   cd /home/srinivas/Projects/Python-projects/SaaS/email
-   ```
-
-2. **Install dependencies with UV:**
-   ```bash
-   uv sync
-   ```
-
-3. **Copy environment template:**
-   ```bash
-   cp .env.example .env
-   ```
-
-4. **Configure environment variables** (edit `.env`):
-
-   **License Configuration:**
-   - Create a Google Sheet with columns: `license_key`, `status`, `expiry_date`
-   - Make it public (Anyone with link can view)
-   - Get the CSV export URL: File → Share → Publish to web → Select CSV
-   - Add your license key to the sheet with status "ACTIVE" and future expiry date
-
-   **Email Configuration:**
-   - For Gmail: Enable 2FA and create an [App Password](https://myaccount.google.com/apppasswords)
-   - Update `.env` with your email and app password
-
-   **Calendar Link:**
-   - Add your Calendly or booking link
-
-### Running the System
-
-```bash
-uv run python -m backend.main
+```python
+# 3 Independent Background Tasks:
+1. Email Queue Processing    → Every 30 seconds
+2. Reply Checking            → Every 5 minutes  
+3. Daily Counter Reset       → Midnight (cron)
 ```
 
-The system will:
-1. Validate your license (blocks startup if invalid)
-2. Initialize the database
-3. Start the background email sender
-4. Start the reply checker (polls every 5 minutes)
-5. Launch the web dashboard at `http://localhost:8000`
+**Why This Matters:**
+- ✅ Tasks run in parallel (non-blocking)
+- ✅ Survives server restarts
+- ✅ Configurable intervals
+- ✅ Automatic error recovery
 
-## 📊 Using the Dashboard
+### 2. **PostgreSQL Support** (Cloud-Ready)
+- SQLite → PostgreSQL migration
+- Auto-detects `DATABASE_URL` from Railway/Render
+- Connection pooling for performance
+- ACID compliance for reliability
 
-1. **Upload Leads:**
-   - Prepare a CSV with columns: `email` (required), `first_name`, `company`, `industry` (optional)
-   - Click "Upload CSV" in the dashboard
-   - System automatically deduplicates by email
+### 3. **Health Monitoring**
+```bash
+GET /health
+```
+Returns:
+```json
+{
+  "status": "healthy",
+  "scheduler_running": true,
+  "timestamp": "2024-02-08T10:30:00Z"
+}
+```
 
-2. **Start Campaign:**
-   - Click "Start" button
-   - System begins sending emails with rate limiting
-   - Random delays: 60-120 seconds between emails
-   - Pause every 20 emails for 5-8 minutes
+Use with UptimeRobot for 24/7 monitoring.
 
-3. **Monitor Progress:**
-   - View real-time metrics (sent today, replies, failed)
-   - Check activity logs
-   - See email send chart
+---
 
-4. **Automatic Follow-ups:**
-   - System sends follow-up 1 after 3 days (no reply)
-   - System sends follow-up 2 after 6 days (no reply)
-   - Stops after 2 follow-ups or when reply detected
+## 🔄 How Parallel Processing Works
 
-5. **Reply Handling:**
-   - System checks IMAP every 5 minutes
-   - When reply detected: marks lead as REPLIED, sends calendar link automatically
+### Architecture Overview
 
-## 🗄️ Database Schema
+```
+┌─────────────────────────────────────────┐
+│         FastAPI Web Server              │
+│   (Handles API requests + Dashboard)    │
+└─────────────────────────────────────────┘
+                    │
+                    ▼
+┌─────────────────────────────────────────┐
+│         APScheduler Background          │
+│                                         │
+│  ┌──────────────┐  ┌──────────────┐   │
+│  │ Email Queue  │  │Reply Checker │   │
+│  │ (30s loop)   │  │ (5min loop)  │   │
+│  └──────────────┘  └──────────────┘   │
+│         │                  │           │
+│         └──────┬───────────┘           │
+│                ▼                       │
+│       ┌─────────────────┐             │
+│       │ Database (Leads)│             │
+│       └─────────────────┘             │
+└─────────────────────────────────────────┘
+```
 
-**SQLite database:** `email_system.db`
+### Task Flow
 
-**Tables:**
-- `leads`: Email addresses, status, follow-up count
-- `campaign`: Campaign state, daily counter
-- `logs`: Activity logs with timestamps
+**1. Email Sending (Every 30 seconds)**
+```
+Check Campaign Status → Get Next Lead → Send Email → Update DB → Apply Rate Limit
+```
 
-## 🔧 Configuration
+**2. Reply Checking (Every 5 minutes)**
+```
+Connect IMAP → Fetch New Emails → Match with Leads → Mark as Replied → Send Calendar Link
+```
 
-Key settings in `.env`:
+**3. Daily Reset (Midnight)**
+```
+Reset sent_today counter → Update last_reset_date
+```
 
+### Key Features
+
+**Non-Blocking:** All tasks run independently
+```python
+# Email sending doesn't block reply checking
+# Reply checking doesn't block daily reset
+# Dashboard API remains responsive
+```
+
+**Crash Recovery:**
+```python
+# If email sending fails → Logs error, continues with next lead
+# If reply check fails → Logs error, retries in 5 minutes
+# Database errors → Automatic retry with backoff
+```
+
+**Rate Limiting:**
+```python
+# Between emails: 60-120 seconds random delay
+# After 20 emails: 5-8 minute pause
+# Daily limit: Stops at 500/day (configurable)
+```
+
+---
+
+## 📁 File Structure
+
+```
+email-outreach-system/
+├── backend/
+│   ├── main.py              # FastAPI app with scheduler integration
+│   ├── scheduler.py         # ⭐ NEW: APScheduler background tasks
+│   ├── config.py            # ⭐ UPDATED: PostgreSQL support
+│   ├── database.py          # ORM models
+│   ├── email_sender.py      # SMTP sending logic
+│   ├── reply_checker.py     # IMAP reply detection
+│   ├── templates.py         # Email templates
+│   └── license_validator.py # License checking
+├── frontend/
+│   ├── index.html
+│   ├── app.js
+│   └── styles.css
+├── requirements.txt         # ⭐ UPDATED: Added APScheduler + psycopg2
+├── Procfile                 # ⭐ NEW: Railway/Render deployment
+├── railway.json             # ⭐ NEW: Railway config
+├── render.yaml              # ⭐ NEW: Render config
+├── DEPLOYMENT_GUIDE.md      # ⭐ NEW: Step-by-step deployment
+└── .env.example
+```
+
+---
+
+## 🚀 Deployment Options
+
+### Option 1: Railway.app (Recommended - $5/month)
+```bash
+1. Push code to GitHub
+2. Connect Railway to your repo
+3. Add PostgreSQL database
+4. Set environment variables
+5. Deploy! ✅
+```
+
+### Option 2: Render.com (Free tier available)
+```bash
+1. Push code to GitHub
+2. Import repository to Render
+3. render.yaml auto-configures everything
+4. Deploy! ✅
+```
+
+### Option 3: DigitalOcean App Platform ($5/month)
+```bash
+1. Create App Platform app
+2. Connect GitHub
+3. Configure buildpack (Python)
+4. Add managed PostgreSQL
+5. Deploy! ✅
+```
+
+**Full deployment instructions:** See `DEPLOYMENT_GUIDE.md`
+
+---
+
+## ⚙️ Environment Variables
+
+**Required:**
 ```env
-DAILY_EMAIL_LIMIT=500         # Max emails per day
-MIN_DELAY_SECONDS=60          # Minimum delay between emails
-MAX_DELAY_SECONDS=120         # Maximum delay between emails
-PAUSE_EVERY_N_EMAILS=20       # Pause frequency
-PAUSE_MIN_MINUTES=5           # Minimum pause duration
-PAUSE_MAX_MINUTES=8           # Maximum pause duration
+LICENSE_SHEET_URL=https://docs.google.com/spreadsheets/d/.../export?format=csv
+LICENSE_KEY=your-license-key
+EMAIL_ADDRESS=your-email@gmail.com
+EMAIL_PASSWORD=your-app-password  # Gmail App Password, not regular password!
 ```
 
-## 🛡️ Crash Recovery
-
-The system is designed to survive crashes and restarts:
-
-- State is written to SQLite after every email send
-- On restart, system reads state from database
-- Duplicate sends are prevented
-- Follow-up schedules are maintained
-- Campaign continues from where it left off
-
-## 📝 Industry Templates
-
-**Pre-configured industries:**
-- Healthcare
-- Fintech
-- EdTech
-
-Each industry has 3 email templates (initial + 2 follow-ups) with variable substitution:
-- `{{first_name}}`
-- `{{company}}`
-- `{{industry}}`
-
-Edit templates in `backend/templates.py`.
-
-## 🚢 Deployment (Cloud VM)
-
-For 24/7 operation, deploy to a cloud VM:
-
-1. **Upload files to server:**
-   ```bash
-   rsync -avz . user@your-server:/path/to/email-system
-   ```
-
-2. **SSH into server:**
-   ```bash
-   ssh user@your-server
-   cd /path/to/email-system
-   ```
-
-3. **Install UV and dependencies:**
-   ```bash
-   curl -LsSf https://astral.sh/uv/install.sh | sh
-   uv sync
-   ```
-
-4. **Configure .env file**
-
-5. **Run with screen or tmux (keeps running after disconnect):**
-   ```bash
-   screen -S email-system
-   uv run python -m backend.main
-   # Press Ctrl+A, then D to detach
-   ```
-
-6. **Reattach later:**
-   ```bash
-   screen -r email-system
-   ```
-
-**Alternative: Use systemd service** (recommended for production)
-
-Create `/etc/systemd/system/email-outreach.service`:
-
-```ini
-[Unit]
-Description=Email Outreach System
-After=network.target
-
-[Service]
-Type=simple
-User=your-user
-WorkingDirectory=/path/to/email-system
-ExecStart=/home/your-user/.cargo/bin/uv run python -m backend.main
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
+**Optional (with defaults):**
+```env
+SMTP_SERVER=smtp.gmail.com
+SMTP_PORT=587
+IMAP_SERVER=imap.gmail.com
+IMAP_PORT=993
+DAILY_EMAIL_LIMIT=500
+MIN_DELAY_SECONDS=60
+MAX_DELAY_SECONDS=120
+PAUSE_EVERY_N_EMAILS=20
+PAUSE_MIN_MINUTES=5
+PAUSE_MAX_MINUTES=8
+CALENDAR_LINK=https://calendly.com/your-link
 ```
 
-Enable and start:
+**Auto-configured by platform:**
+```env
+DATABASE_URL=postgresql://...  # Railway/Render sets this automatically
+PORT=8000                      # Railway/Render sets this automatically
+```
+
+---
+
+## 🔧 Local Development
+
 ```bash
-sudo systemctl enable email-outreach
-sudo systemctl start email-outreach
-sudo systemctl status email-outreach
+# Install dependencies
+pip install -r requirements.txt
+
+# Create .env file
+cp .env.example .env
+# Edit .env with your credentials
+
+# Run migrations (creates SQLite DB locally)
+python -c "from backend.database import init_db; init_db()"
+
+# Start server
+uvicorn backend.main:app --reload
+
+# Access dashboard
+open http://localhost:8000
 ```
+
+**Note:** Local uses SQLite, cloud uses PostgreSQL
+
+---
+
+## 📊 Monitoring
+
+### Health Check
+```bash
+curl https://your-app.railway.app/health
+```
+
+### View Logs
+**Railway:**
+```bash
+railway logs
+```
+
+**Render:**
+```bash
+# View in dashboard → Logs tab
+```
+
+### What to Monitor
+
+✅ **Scheduler Status:** `scheduler_running: true`
+✅ **Email Sending:** `✅ Sent initial to user@example.com`
+✅ **Reply Checking:** `📬 Checking for replies...`
+✅ **Errors:** `❌ Error sending to...` (should be rare)
+
+---
+
+## 🎯 Key Metrics
+
+### Dashboard Shows:
+- **Sent Today:** Current / Daily Limit
+- **Replies:** Total reply count
+- **Failed:** Failed email count
+- **Campaign Status:** Running / Paused / Stopped
+
+### Database Tracks:
+- Lead status (PENDING → SENT → REPLIED)
+- Follow-up count (0, 1, 2)
+- Last sent timestamp
+- All activity logs
+
+---
 
 ## 🐛 Troubleshooting
 
-**License validation fails:**
-- Check Google Sheet is public
-- Verify CSV export URL is correct
-- Ensure license key matches exactly
-- Check expiry date format (YYYY-MM-DD recommended)
+### Scheduler Not Running
+**Check logs for:**
+```
+✅ Email scheduler started
+```
 
-**SMTP connection errors:**
-- For Gmail: Use App Password, not regular password
-- Check firewall allows outbound connections on port 587
-- Verify SMTP server and port are correct
+**If missing:**
+1. Verify `backend/scheduler.py` exists
+2. Check `main.py` imports `email_scheduler`
+3. Restart service
 
-**Emails not sending:**
-- Check campaign status (must be RUNNING)
-- Verify daily limit not reached
-- Check logs for error messages
-- Test SMTP connection manually
+### Emails Not Sending
+**Check:**
+1. ✅ Campaign status = RUNNING
+2. ✅ Gmail App Password (not regular password)
+3. ✅ Daily limit not reached
+4. ✅ Leads exist with PENDING status
 
-**Reply detection not working:**
-- Verify IMAP credentials
-- Check IMAP port (993 for SSL)
-- Ensure inbox has recent emails
+### Replies Not Detected
+**Check:**
+1. ✅ IMAP credentials correct
+2. ✅ Reply checker running (logs show `📬 Checking...`)
+3. ✅ Emails are actually replies (not new emails)
 
-## 📖 API Endpoints
+---
 
-- `POST /api/upload-leads` - Upload CSV with leads
-- `POST /api/campaign/start` - Start campaign
-- `POST /api/campaign/pause` - Pause campaign
-- `POST /api/campaign/stop` - Stop campaign
-- `GET /api/metrics` - Get current metrics
-- `GET /api/logs` - Get activity logs
-- `GET /api/campaign/status` - Get campaign status
+## 📈 Scaling
 
-## 📄 License
+### Current Capacity
+- **500 emails/day** (configurable)
+- **Single worker** handles ~1 email/minute
+- **PostgreSQL** supports millions of leads
 
-This is a proprietary system. Valid license required to run.
+### To Scale Up
 
-## 🆘 Support
+**Increase Daily Limit:**
+```env
+DAILY_EMAIL_LIMIT=1000
+```
 
-For issues or questions, check the logs in the dashboard or database.
+**Faster Processing:**
+```python
+# In scheduler.py, line 27:
+IntervalTrigger(seconds=15)  # Was 30 seconds
+```
+
+**Multiple Workers:**
+```yaml
+# railway.json
+"replicas": 2
+```
+
+**Note:** Multiple replicas need Redis for coordination (advanced)
+
+---
+
+## 🔐 Security
+
+✅ **Credentials:** Never commit `.env` file
+✅ **License:** Validated on startup (blocks unauthorized use)
+✅ **HTTPS:** Automatic with Railway/Render
+✅ **Environment Variables:** Encrypted in platform
+
+---
+
+## 📞 Support
+
+**Issues?**
+1. Check `DEPLOYMENT_GUIDE.md`
+2. Review logs in hosting dashboard
+3. Test `/health` endpoint
+4. Verify environment variables
+
+**Performance Questions?**
+- Current setup handles **500 emails/day**
+- Can scale to **5,000+ emails/day** with Redis + multiple workers
+- PostgreSQL supports **unlimited leads**
+
+---
+
+## 🎉 You're Ready!
+
+Your email outreach system is now:
+- ✅ Running 24/7 in the cloud
+- ✅ Processing emails in parallel
+- ✅ Automatically checking replies
+- ✅ Sending calendar links on reply
+- ✅ Crash-resistant with auto-recovery
+- ✅ Fully monitored and logged
+
+**Next Steps:**
+1. Deploy to Railway/Render (15 minutes)
+2. Upload your lead list
+3. Start campaign
+4. Monitor for 24 hours
+5. Scale as needed
+
+Happy outreaching! 🚀

@@ -57,7 +57,7 @@ class CustomTemplate(Base):
     __tablename__ = "custom_templates"
     
     id = Column(Integer, primary_key=True, autoincrement=True)
-    template_type = Column(String(20), nullable=False)  # initial, followup1, followup2
+    template_type = Column(String(20), nullable=False)  # initial, followup1, followup2, reply
     subject = Column(String(500), nullable=False)
     body = Column(Text, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)

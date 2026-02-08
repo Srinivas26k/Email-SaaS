@@ -67,34 +67,37 @@ class ReplyChecker:
             if not sender_email or sender_email == self.email_address:
                 return
             
-            # Check if this is a reply from a lead
+            # Check if this is a reply from a lead (check ANY status, not just SENT)
             session = SessionLocal()
             try:
                 lead = session.query(Lead).filter(
-                    Lead.email == sender_email,
-                    Lead.status == LeadStatus.SENT
+                    Lead.email == sender_email
                 ).first()
                 
                 if lead:
-                    print(f"📧 Reply detected from: {sender_email}")
-                    
-                    # Mark as replied
-                    lead.status = LeadStatus.REPLIED
-                    session.commit()
-                    
-                    # Log event
-                    log = Log(
-                        email=sender_email,
-                        event=f"Reply received from {sender_email}"
-                    )
-                    session.add(log)
-                    session.commit()
-                    
-                    # Send automatic calendar link
-                    self._send_calendar_response(sender_email)
-                    
-                    # Mark message as processed
-                    self.processed_message_ids.add(message_id)
+                    # Only process if not already marked as replied
+                    if lead.status != LeadStatus.REPLIED:
+                        print(f"📧 Reply detected from: {sender_email} (was {lead.status.value})")
+                        
+                        # Mark as replied
+                        lead.status = LeadStatus.REPLIED
+                        session.commit()
+                        
+                        # Log event
+                        log = Log(
+                            email=sender_email,
+                            event=f"Reply received from {sender_email}"
+                        )
+                        session.add(log)
+                        session.commit()
+                        
+                        # Send automatic calendar link
+                        self._send_calendar_response(sender_email)
+                        
+                        # Mark message as processed
+                        self.processed_message_ids.add(message_id)
+                    else:
+                        print(f"ℹ️  Email from {sender_email} already marked as REPLIED")
                 
             finally:
                 session.close()
@@ -111,38 +114,69 @@ class ReplyChecker:
         return from_header.strip().lower()
     
     def _send_calendar_response(self, to_email: str):
-        """Send automatic calendar link response."""
-        subject = "Let's schedule a call!"
-        body = f"""Hi,
+        """Send automatic calendar link response with custom template."""
+        session = SessionLocal()
+        try:
+            # Get lead data for personalization
+            lead = session.query(Lead).filter(Lead.email == to_email).first()
+            lead_data = {}
+            if lead and lead.data_json:
+                import json
+                lead_data = json.loads(lead.data_json)
+            
+            # Get custom reply template
+            from backend.database import CustomTemplate
+            reply_template = session.query(CustomTemplate).filter(
+                CustomTemplate.template_type == 'reply'
+            ).first()
+            
+            if reply_template:
+                # Use custom template
+                subject = reply_template.subject
+                body = reply_template.body
+            else:
+                # Use default template
+                subject = "Let's schedule a call!"
+                body = """Hi {{first_name}},
 
 Thanks for your reply! I'd love to connect with you.
 
 Please book a time that works best for you here:
-{self.calendar_link}
+{{calendar_link}}
 
 Looking forward to our conversation!
 
-Best regards,
-Your Team"""
-        
-        success = self.email_sender.send_email(to_email, subject, body)
-        
-        if success:
-            print(f"✅ Sent calendar link to {to_email}")
+Best regards"""
             
-            # Log the calendar send
-            session = SessionLocal()
-            try:
+            # Replace placeholders
+            # Add calendar_link to lead_data for replacement
+            lead_data['calendar_link'] = self.calendar_link
+            lead_data['email'] = to_email
+            
+            # Replace {{placeholder}} with actual values
+            for key, value in lead_data.items():
+                placeholder = f"{{{{{key}}}}}"
+                subject = subject.replace(placeholder, str(value))
+                body = body.replace(placeholder, str(value))
+            
+            # Send email
+            success = self.email_sender.send_email(to_email, subject, body)
+            
+            if success:
+                print(f"✅ Sent calendar link to {to_email}")
+                
+                # Log the calendar send
                 log = Log(
                     email=to_email,
                     event=f"Sent calendar link to {to_email}"
                 )
                 session.add(log)
                 session.commit()
-            finally:
-                session.close()
-        else:
-            print(f"❌ Failed to send calendar link to {to_email}")
+            else:
+                print(f"❌ Failed to send calendar link to {to_email}")
+                
+        finally:
+            session.close()
     
     def test_connection(self) -> bool:
         """Test IMAP connection."""

@@ -12,6 +12,7 @@ dependencies = [
     "requests>=2.31.0",
     "aiofiles>=23.2.1",
     "python-multipart>=0.0.6",
+    "apscheduler>=3.11.2",
 ]
 
 [build-system]
