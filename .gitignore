@@ -58,3 +58,7 @@ htmlcov/
 *.tmp
 *.temp
 .cache/
+
+
+
+test-docs
