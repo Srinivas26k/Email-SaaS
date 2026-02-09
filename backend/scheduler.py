@@ -36,16 +36,20 @@ class EmailScheduler:
         if self.running:
             logger.warning("Scheduler already running")
             return
+        settings = get_app_settings()
+        queue_sec = max(30, int(settings.get("email_queue_interval_seconds", "300") or 300))
+        reply_sec = max(60, int(settings.get("reply_check_interval_seconds", "300") or 300))
+        logger.info("Email queue every %s s, reply check every %s s", queue_sec, reply_sec)
         self.scheduler.add_job(
             func=self.process_email_queue,
-            trigger=IntervalTrigger(seconds=30),
+            trigger=IntervalTrigger(seconds=queue_sec),
             id="email_sender",
             name="Process email queue",
             replace_existing=True,
         )
         self.scheduler.add_job(
             func=self.check_for_replies,
-            trigger=IntervalTrigger(minutes=5),
+            trigger=IntervalTrigger(seconds=reply_sec),
             id="reply_checker",
             name="Check for email replies",
             replace_existing=True,
@@ -83,10 +87,12 @@ class EmailScheduler:
         try:
             campaign = session.query(Campaign).first()
             if not campaign or campaign.status != CampaignStatus.RUNNING:
+                logger.info("Email queue: campaign not running, skipping")
                 return
             settings = get_app_settings()
             daily_limit = int(settings.get("daily_email_limit", "500"))
             if campaign.sent_today >= daily_limit:
+                logger.info("Email queue: daily limit reached (%s/%s), skipping", campaign.sent_today, daily_limit)
                 return
 
             account = get_next_sending_account()
@@ -96,6 +102,7 @@ class EmailScheduler:
 
             lead = self._get_next_lead(session)
             if not lead:
+                logger.info("Email queue: no pending lead, skipping")
                 return
 
             self._send_to_lead(session, lead, campaign, account)
@@ -106,6 +113,7 @@ class EmailScheduler:
 
     def check_for_replies(self):
         try:
+            logger.info("Reply check job ran")
             self.reply_checker.check_replies()
         except Exception as e:
             logger.error("Error checking replies: %s", e, exc_info=True)

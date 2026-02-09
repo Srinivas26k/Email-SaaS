@@ -18,6 +18,8 @@ from backend.settings_service import (
     get_app_settings,
     save_app_settings,
     get_email_accounts,
+    get_email_accounts_db_only,
+    get_env_fallback_account,
     create_email_account,
     update_email_account,
     delete_email_account,
@@ -598,11 +600,11 @@ async def get_analytics(
 
 @app.get("/api/settings")
 async def get_settings():
-    """Get app settings and email accounts (passwords masked)."""
+    """Get app settings and email accounts (passwords masked). Only DB accounts in list to avoid null id."""
     s = get_app_settings()
-    accounts = get_email_accounts(active_only=False)
+    accounts = get_email_accounts_db_only(active_only=False)
+    using_env_fallback = len(accounts) == 0 and get_env_fallback_account() is not None
     return {
-        "license_sheet_url": s.get("license_sheet_url", ""),
         "license_key": s.get("license_key", ""),
         "daily_limit": s.get("daily_email_limit", "500"),
         "min_delay": s.get("min_delay_seconds", "60"),
@@ -611,6 +613,9 @@ async def get_settings():
         "pause_min_minutes": s.get("pause_min_minutes", "5"),
         "pause_max_minutes": s.get("pause_max_minutes", "8"),
         "calendar_link": s.get("calendar_link", ""),
+        "email_queue_interval_seconds": s.get("email_queue_interval_seconds", "300"),
+        "reply_check_interval_seconds": s.get("reply_check_interval_seconds", "300"),
+        "using_env_fallback": using_env_fallback,
         "email_accounts": [
             {
                 "id": a.id,
@@ -631,10 +636,12 @@ async def get_settings():
 @app.post("/api/settings")
 async def save_settings(settings: dict):
     """Save app settings (from Settings page)."""
+    # license_sheet_url is owner-only (.env), not saved from UI
     allowed = {
-        "license_sheet_url", "license_key", "daily_email_limit",
+        "license_key", "daily_email_limit",
         "min_delay_seconds", "max_delay_seconds", "pause_every_n_emails",
         "pause_min_minutes", "pause_max_minutes", "calendar_link",
+        "email_queue_interval_seconds", "reply_check_interval_seconds",
     }
     to_save = {k: str(v).strip() for k, v in (settings or {}).items() if k in allowed}
     save_app_settings(to_save)

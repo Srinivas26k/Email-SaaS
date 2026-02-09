@@ -11,7 +11,7 @@ from backend.config import config as env_config
 
 logger = logging.getLogger(__name__)
 
-# Keys for app_settings table
+# Keys for app_settings table (license_sheet_url is owner-only, set in .env only)
 KEYS = {
     "license_sheet_url": "",
     "license_key": "",
@@ -22,6 +22,8 @@ KEYS = {
     "pause_min_minutes": "5",
     "pause_max_minutes": "8",
     "calendar_link": "https://calendly.com/your-link",
+    "email_queue_interval_seconds": "300",   # How often to process send queue (60=demo 1min, 300=prod 5min)
+    "reply_check_interval_seconds": "300",  # How often to check for replies (60=demo, 300=prod 5min)
 }
 
 
@@ -37,6 +39,8 @@ def _get_env_fallback(key: str) -> str:
         "pause_min_minutes": "PAUSE_MIN_MINUTES",
         "pause_max_minutes": "PAUSE_MAX_MINUTES",
         "calendar_link": "CALENDAR_LINK",
+        "email_queue_interval_seconds": "EMAIL_QUEUE_INTERVAL_SECONDS",
+        "reply_check_interval_seconds": "REPLY_CHECK_INTERVAL_SECONDS",
     }
     env_name = env_map.get(key)
     if env_name:
@@ -110,6 +114,18 @@ def get_email_accounts(active_only: bool = True) -> List[Any]:
             if env_acc:
                 return [env_acc]
         return accounts
+    finally:
+        session.close()
+
+
+def get_email_accounts_db_only(active_only: bool = False) -> List[EmailAccount]:
+    """Return only DB email accounts (no env fallback). Use for Settings UI so we never expose null id."""
+    session = SessionLocal()
+    try:
+        q = session.query(EmailAccount).order_by(EmailAccount.id)
+        if active_only:
+            q = q.filter(EmailAccount.is_active == 1)
+        return q.all()
     finally:
         session.close()
 

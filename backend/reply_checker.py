@@ -5,6 +5,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Set
 
+from sqlalchemy import func
 from backend.database import SessionLocal, Lead, LeadStatus, Log
 from backend.settings_service import get_email_accounts, get_app_settings
 from backend.email_sender import EmailSender
@@ -22,9 +23,9 @@ class ReplyChecker:
         """Check each active account's INBOX for replies from leads."""
         accounts = get_email_accounts(active_only=True)
         if not accounts:
-            logger.debug("No email accounts for reply check")
+            logger.warning("Reply check: no email accounts (add one in Settings or set .env)")
             return
-        logger.info("Checking for replies...")
+        logger.info("Checking for replies (%s account(s))...", len(accounts))
         for acc in accounts:
             try:
                 self._check_account(acc)
@@ -32,16 +33,21 @@ class ReplyChecker:
                 logger.exception("Error checking replies for %s: %s", getattr(acc, "email", "?"), e)
 
     def _check_account(self, acc):
+        acc_label = getattr(acc, "label", None) or getattr(acc, "email", "?")
+        logger.info("Reply check: checking INBOX for account %s", acc_label)
         mail = imaplib.IMAP4_SSL(acc.imap_server, acc.imap_port, timeout=30)
         mail.login(acc.email, acc.password)
         mail.select("INBOX")
         date_since = (datetime.now() - timedelta(days=7)).strftime("%d-%b-%Y")
         _, message_numbers = mail.search(None, f"SINCE {date_since}")
-        if not message_numbers[0]:
+        ids = (message_numbers[0] or b"").split()
+        if not ids:
             mail.close()
             mail.logout()
+            logger.info("Reply check: no messages in INBOX for %s", acc_label)
             return
-        for num in message_numbers[0].split():
+        logger.info("Reply check: scanning %s message(s) for %s", len(ids), acc_label)
+        for num in ids:
             self._process_email(mail, num, acc)
         mail.close()
         mail.logout()
@@ -61,7 +67,7 @@ class ReplyChecker:
 
             session = SessionLocal()
             try:
-                lead = session.query(Lead).filter(Lead.email == sender_email).first()
+                lead = session.query(Lead).filter(func.lower(Lead.email) == sender_email).first()
                 if not lead:
                     return
                 if lead.status == LeadStatus.REPLIED:

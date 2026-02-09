@@ -819,8 +819,9 @@ async function loadSettings() {
         const data = await response.json();
 
         const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v || ''; };
-        set('settingsLicenseSheetUrl', data.license_sheet_url);
         set('settingsLicenseKey', data.license_key);
+        set('settingsEmailQueueInterval', data.email_queue_interval_seconds);
+        set('settingsReplyCheckInterval', data.reply_check_interval_seconds);
         set('settingsDailyLimit', data.daily_limit);
         set('settingsMinDelay', data.min_delay);
         set('settingsMaxDelay', data.max_delay);
@@ -829,17 +830,20 @@ async function loadSettings() {
         set('settingsPauseMax', data.pause_max_minutes);
         set('settingsCalendarLink', data.calendar_link);
 
-        renderEmailAccountsList(data.email_accounts || []);
+        renderEmailAccountsList(data.email_accounts || [], data.using_env_fallback === true);
     } catch (error) {
         console.error('Failed to load settings:', error);
     }
 }
 
-function renderEmailAccountsList(accounts) {
+function renderEmailAccountsList(accounts, usingEnvFallback) {
     const container = document.getElementById('emailAccountsList');
     if (!container) return;
     if (!accounts || accounts.length === 0) {
-        container.innerHTML = '<p class="no-data">No email accounts yet. Add one below.</p>';
+        const msg = usingEnvFallback
+            ? 'No email accounts yet. Sending uses .env if configured. Add one below to manage and test.'
+            : 'No email accounts yet. Add one below.';
+        container.innerHTML = `<p class="no-data">${msg}</p>`;
         if (typeof lucide !== 'undefined') lucide.createIcons();
         return;
     }
@@ -869,6 +873,10 @@ function renderEmailAccountsList(accounts) {
 }
 
 async function testAccountConnection(accountId, btn) {
+    if (accountId == null || accountId === undefined || accountId === 'null') {
+        if (btn) btn.disabled = false;
+        return;
+    }
     const resultEl = document.getElementById(`testResult-${accountId}`);
     if (resultEl) { resultEl.textContent = 'Checking...'; resultEl.className = 'test-result pending'; }
     if (btn) btn.disabled = true;
@@ -970,8 +978,9 @@ async function saveAppSettings(event) {
     if (event) event.preventDefault();
     try {
         const payload = {
-            license_sheet_url: document.getElementById('settingsLicenseSheetUrl')?.value?.trim() || '',
             license_key: document.getElementById('settingsLicenseKey')?.value?.trim() || '',
+            email_queue_interval_seconds: document.getElementById('settingsEmailQueueInterval')?.value?.trim() || '300',
+            reply_check_interval_seconds: document.getElementById('settingsReplyCheckInterval')?.value?.trim() || '300',
             daily_email_limit: document.getElementById('settingsDailyLimit')?.value?.trim() || '500',
             min_delay_seconds: document.getElementById('settingsMinDelay')?.value?.trim() || '60',
             max_delay_seconds: document.getElementById('settingsMaxDelay')?.value?.trim() || '120',
