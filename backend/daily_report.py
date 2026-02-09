@@ -106,9 +106,9 @@ class DailyReportGenerator:
                 'last_7_days': last_7_days,
                 'recent_activity': [
                     {
-                        'event': log.event,
-                        'email': log.email,
-                        'timestamp': log.timestamp.strftime('%Y-%m-%d %H:%M:%S')
+                        'event': log.event or '',
+                        'email': log.email or '',
+                        'timestamp': log.timestamp.strftime('%Y-%m-%d %H:%M:%S') if log.timestamp else ''
                     }
                     for log in recent_logs
                 ],

@@ -94,7 +94,7 @@ async def upload_leads(
         contents = await file.read()
         print(f"📊 File size: {len(contents)} bytes")
         
-        df = pd.read_csv(StringIO(contents.decode('utf-8')))
+        df = pd.read_csv(StringIO(contents.decode('utf-8', errors='replace')))
         
         # Validate required column
         if 'email' not in df.columns:
@@ -280,11 +280,12 @@ async def get_campaign_status(db: Session = Depends(get_db)):
 async def get_available_columns(db: Session = Depends(get_db)):
     """Get available CSV columns."""
     campaign = db.query(Campaign).first()
-    
     if not campaign or not campaign.available_columns:
         return {"columns": []}
-    
-    return {"columns": json.loads(campaign.available_columns)}
+    try:
+        return {"columns": json.loads(campaign.available_columns)}
+    except (json.JSONDecodeError, TypeError):
+        return {"columns": []}
 
 
 @app.post("/api/templates/save")
@@ -357,9 +358,14 @@ async def get_leads(
         # Base query
         query = db.query(Lead)
         
-        # Filter by status
+        # Filter by status (validate to avoid KeyError on invalid status)
         if status and status != "all":
-            query = query.filter(Lead.status == LeadStatus[status.upper()])
+            try:
+                status_enum = LeadStatus[status.upper()]
+            except KeyError:
+                status_enum = None
+            if status_enum is not None:
+                query = query.filter(Lead.status == status_enum)
         
         # Search
         if search:
@@ -391,10 +397,13 @@ async def get_leads(
         offset = (page - 1) * limit
         leads = query.offset(offset).limit(limit).all()
         
-        # Format leads
+        # Format leads (safe parse data_json for corrupt/malformed data)
         leads_data = []
         for lead in leads:
-            lead_json = json.loads(lead.data_json) if lead.data_json else {}
+            try:
+                lead_json = json.loads(lead.data_json) if lead.data_json else {}
+            except (json.JSONDecodeError, TypeError):
+                lead_json = {}
             leads_data.append({
                 "id": lead.id,
                 "email": lead.email,
@@ -430,9 +439,12 @@ async def update_lead(
         if not lead:
             raise HTTPException(status_code=404, detail="Lead not found")
         
-        # Update status if provided
+        # Update status if provided (validate to avoid KeyError)
         if "status" in update_data:
-            lead.status = LeadStatus[update_data["status"].upper()]
+            try:
+                lead.status = LeadStatus[update_data["status"].upper()]
+            except (KeyError, AttributeError):
+                raise HTTPException(status_code=400, detail="Invalid status")
         
         # Update data if provided
         if "data" in update_data:
@@ -592,6 +604,10 @@ async def get_analytics(
             "daily_stats": daily_stats
         }
         
+    except ValueError as e:
+        if "date" in str(e).lower() or "time" in str(e).lower():
+            raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
+        raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -674,10 +690,14 @@ async def list_email_accounts():
 async def add_email_account(data: dict):
     """Add an email account."""
     try:
+        email = (data.get("email") or "").strip()
+        password = data.get("password") or ""
+        if not email or not password:
+            raise HTTPException(status_code=400, detail="Email and password required")
         acc = create_email_account(
-            label=data.get("label", "").strip() or data.get("email", ""),
-            email=data["email"],
-            password=data["password"],
+            label=(data.get("label") or "").strip() or email,
+            email=email,
+            password=password,
             smtp_server=data.get("smtp_server", "smtp.gmail.com"),
             smtp_port=int(data.get("smtp_port", 587)),
             imap_server=data.get("imap_server", "imap.gmail.com"),

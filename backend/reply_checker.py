@@ -105,7 +105,10 @@ class ReplyChecker:
             lead_data = {}
             if lead and lead.data_json:
                 import json
-                lead_data = json.loads(lead.data_json)
+                try:
+                    lead_data = json.loads(lead.data_json)
+                except (json.JSONDecodeError, TypeError):
+                    lead_data = {}
             settings = get_app_settings()
             calendar_link = settings.get("calendar_link", "https://calendly.com/your-link")
             from backend.database import CustomTemplate

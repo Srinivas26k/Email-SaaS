@@ -153,6 +153,9 @@ Open browser: **http://localhost:8000**
 **Reply detection fails:**  
 → Verify IMAP credentials, port 993
 
+**Railway: "Network is unreachable" when sending:**  
+→ Many clouds block outbound SMTP (ports 25/587/465). On Railway, ensure your plan allows outbound SMTP, or use a transactional provider (SendGrid, Mailgun, Resend) and add its SMTP host in Settings.
+
 ---
 
 ## 📖 Full Documentation

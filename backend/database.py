@@ -1,6 +1,6 @@
 """Database models and initialization."""
 from datetime import datetime
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, Enum
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, Enum, inspect
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import enum
@@ -36,7 +36,7 @@ class Lead(Base):
     status = Column(Enum(LeadStatus), default=LeadStatus.PENDING, nullable=False)
     last_sent_at = Column(DateTime, nullable=True)
     followup_count = Column(Integer, default=0, nullable=False)
-    email_account_id = Column(Integer, nullable=True)  # which account sent to this lead (for reply matching)
+    email_account_id = Column(Integer, nullable=True, index=True)  # which account sent to this lead
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
@@ -106,32 +106,45 @@ class EmailAccount(Base):
 # Database engine and session
 engine = create_engine(
     config.DATABASE_URL.replace("sqlite:///", "sqlite:///"),
-    connect_args={"check_same_thread": False} if "sqlite" in config.DATABASE_URL else {}
+    connect_args={"check_same_thread": False} if "sqlite" in config.DATABASE_URL else {},
+    pool_pre_ping=True,  # Verify connections before using
+    pool_recycle=3600,   # Recycle connections every hour
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
 def init_db():
-    """Initialize database tables."""
+    """Initialize database tables with migrations."""
+    # Create all tables
     Base.metadata.create_all(bind=engine)
     
     session = SessionLocal()
     try:
+        # Create initial campaign if doesn't exist
         campaign = session.query(Campaign).first()
         if not campaign:
             campaign = Campaign(status=CampaignStatus.STOPPED, sent_today=0)
             session.add(campaign)
             session.commit()
+            print("✅ Created initial campaign")
     finally:
         session.close()
+    
     # Migration: add email_account_id to leads if missing
     try:
-        from sqlalchemy import text
-        with engine.connect() as conn:
-            conn.execute(text("ALTER TABLE leads ADD COLUMN email_account_id INTEGER"))
-            conn.commit()
-    except Exception:
-        pass  # column already exists
+        inspector = inspect(engine)
+        columns = [col['name'] for col in inspector.get_columns('leads')]
+        
+        if 'email_account_id' not in columns:
+            from sqlalchemy import text
+            with engine.connect() as conn:
+                # PostgreSQL and SQLite compatible ALTER TABLE
+                conn.execute(text("ALTER TABLE leads ADD COLUMN email_account_id INTEGER"))
+                conn.commit()
+            print("✅ Added email_account_id column to leads table")
+    except Exception as e:
+        # Column already exists or other minor issue - safe to continue
+        print(f"ℹ️  Migration note: {e}")
 
 
 def get_db():

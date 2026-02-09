@@ -163,7 +163,10 @@ class EmailScheduler:
 
     def _send_to_lead(self, session, lead: Lead, campaign: Campaign, account):
         try:
-            lead_data = json.loads(lead.data_json) if lead.data_json else {}
+            try:
+                lead_data = json.loads(lead.data_json) if lead.data_json else {}
+            except (json.JSONDecodeError, TypeError):
+                lead_data = {}
             if lead.followup_count == 0:
                 template_type = "initial"
             elif lead.followup_count == 1:
@@ -178,24 +181,16 @@ class EmailScheduler:
                 .filter(CustomTemplate.template_type == template_type)
                 .first()
             )
-            if custom_template:
-                rendered = render_custom_template(
-                    custom_template.subject, custom_template.body, lead_data
-                )
-            else:
-                from backend.templates import render_template
-
-                industry = lead_data.get("industry", "healthcare")
-                rendered = render_template(
-                    industry,
+            if not custom_template:
+                logger.warning(
+                    "No template configured for %s - add templates in Templates page (every lead sheet is different, no predefined templates)",
                     template_type,
-                    {
-                        "first_name": lead_data.get("first_name", "there"),
-                        "company": lead_data.get("company", "your company"),
-                        "industry": industry,
-                    },
                 )
+                return
 
+            rendered = render_custom_template(
+                custom_template.subject, custom_template.body, lead_data
+            )
             sender = EmailSender(account=account)
             success = sender.send_email(
                 lead.email, rendered["subject"], rendered["body"]

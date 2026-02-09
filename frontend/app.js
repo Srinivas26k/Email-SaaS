@@ -182,22 +182,31 @@ function initCharts() {
 async function loadMetrics() {
     try {
         const response = await fetch(`${API_BASE}/api/metrics`);
-        const data = await response.json();
+        const data = await response.json().catch(() => ({}));
+        const sent = data.sent_today ?? 0;
+        const limit = data.daily_limit || 500;
+        const replies = data.replies ?? 0;
+        const failed = data.failed ?? 0;
+        const status = data.campaign_status || 'STOPPED';
 
-        document.getElementById('sentToday').textContent = `${data.sent_today} / ${data.daily_limit}`;
-        document.getElementById('replies').textContent = data.replies;
-        document.getElementById('failed').textContent = data.failed;
+        document.getElementById('sentToday').textContent = `${sent} / ${limit}`;
+        document.getElementById('replies').textContent = replies;
+        document.getElementById('failed').textContent = failed;
         const repliedEl = document.getElementById('repliedCount');
-        if (repliedEl) repliedEl.textContent = data.replies;
+        if (repliedEl) repliedEl.textContent = replies;
 
         const statusBadge = document.getElementById('campaignStatus');
-        statusBadge.textContent = data.campaign_status;
-        statusBadge.style.backgroundColor = getStatusBGColor(data.campaign_status);
-        statusBadge.style.color = getStatusTextColor(data.campaign_status);
+        if (statusBadge) {
+            statusBadge.textContent = status;
+            statusBadge.style.backgroundColor = getStatusBGColor(status);
+            statusBadge.style.color = getStatusTextColor(status);
+        }
 
-        const percentage = (data.sent_today / data.daily_limit) * 100;
-        document.getElementById('progressFill').style.width = `${percentage}%`;
-        document.getElementById('progressPercent').textContent = `${Math.round(percentage)}%`;
+        const percentage = limit > 0 ? (sent / limit) * 100 : 0;
+        const progressFill = document.getElementById('progressFill');
+        const progressPercent = document.getElementById('progressPercent');
+        if (progressFill) progressFill.style.width = `${percentage}%`;
+        if (progressPercent) progressPercent.textContent = `${Math.round(percentage)}%`;
 
     } catch (error) {
         console.error('Failed to load metrics:', error);
@@ -207,9 +216,9 @@ async function loadMetrics() {
 async function loadDashboardLogs() {
     try {
         const response = await fetch(`${API_BASE}/api/logs?page=1&limit=10`);
-        const data = await response.json();
-
+        const data = await response.json().catch(() => ({}));
         const container = document.getElementById('dashboardLogsContainer');
+        if (!container) return;
         if (data.logs && data.logs.length > 0) {
             container.innerHTML = data.logs.map(log => `
                 <div class="log-entry">
@@ -229,8 +238,12 @@ async function loadDashboardLogs() {
 async function startCampaign() {
     try {
         const response = await fetch(`${API_BASE}/api/campaign/start`, { method: 'POST' });
-        const data = await response.json();
-        showNotification(data.message, 'success');
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            showNotification(data.detail || 'Failed to start campaign', 'error');
+            return;
+        }
+        showNotification(data.message || 'Campaign started', 'success');
         loadMetrics();
     } catch (error) {
         showNotification('Failed to start campaign', 'error');
@@ -240,8 +253,12 @@ async function startCampaign() {
 async function pauseCampaign() {
     try {
         const response = await fetch(`${API_BASE}/api/campaign/pause`, { method: 'POST' });
-        const data = await response.json();
-        showNotification(data.message, 'success');
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            showNotification(data.detail || 'Failed to pause campaign', 'error');
+            return;
+        }
+        showNotification(data.message || 'Campaign paused', 'success');
         loadMetrics();
     } catch (error) {
         showNotification('Failed to pause campaign', 'error');
@@ -251,8 +268,12 @@ async function pauseCampaign() {
 async function stopCampaign() {
     try {
         const response = await fetch(`${API_BASE}/api/campaign/stop`, { method: 'POST' });
-        const data = await response.json();
-        showNotification(data.message, 'success');
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            showNotification(data.detail || 'Failed to stop campaign', 'error');
+            return;
+        }
+        showNotification(data.message || 'Campaign stopped', 'success');
         loadMetrics();
     } catch (error) {
         showNotification('Failed to stop campaign', 'error');
@@ -337,10 +358,14 @@ async function loadLeads() {
         if (search) params.append('search', search);
 
         const response = await fetch(`${API_BASE}/api/leads?${params}`);
-        const data = await response.json();
-
-        renderLeadsTable(data.leads);
-        renderPagination(data.page, data.pages);
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            document.getElementById('leadsTableBody').innerHTML =
+                '<tr><td colspan="8" class="no-data">Failed to load leads</td></tr>';
+            return;
+        }
+        renderLeadsTable(data.leads || []);
+        renderPagination(data.page ?? 1, data.pages ?? 1);
 
     } catch (error) {
         console.error('Failed to load leads:', error);
@@ -357,12 +382,14 @@ function renderLeadsTable(leads) {
         return;
     }
 
-    tbody.innerHTML = leads.map(lead => `
+    tbody.innerHTML = leads.map(lead => {
+        const d = lead.data || {};
+        return `
         <tr>
             <td><input type="checkbox" class="lead-checkbox" value="${lead.id}"></td>
             <td>${escapeHtml(lead.email)}</td>
-            <td>${escapeHtml(lead.data.name || lead.data.first_name || '-')}</td>
-            <td>${escapeHtml(lead.data.company || '-')}</td>
+            <td>${escapeHtml(d.name || d.first_name || '-')}</td>
+            <td>${escapeHtml(d.company || '-')}</td>
             <td><span class="status-pill status-${lead.status.toLowerCase()}">${lead.status}</span></td>
             <td>${lead.last_sent_at ? formatDate(lead.last_sent_at) : '-'}</td>
             <td>${lead.followup_count}</td>
@@ -370,7 +397,8 @@ function renderLeadsTable(leads) {
                 <button class="action-btn action-delete" onclick="deleteLead(${lead.id})">Delete</button>
             </td>
         </tr>
-    `).join('');
+    `;
+    }).join('');
 }
 
 function renderPagination(current, total) {
@@ -436,8 +464,11 @@ async function deleteLead(id) {
 
     try {
         const response = await fetch(`${API_BASE}/api/leads/${id}`, { method: 'DELETE' });
-        const data = await response.json();
-
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            showNotification(data.detail || 'Failed to delete lead', 'error');
+            return;
+        }
         if (data.success) {
             showNotification('Lead deleted', 'success');
             loadLeads();
@@ -487,24 +518,28 @@ async function loadAnalytics() {
         const response = await fetch(url);
         const data = await response.json();
 
-        // Update stats
-        document.getElementById('analyticsTotal').textContent = data.total_leads;
-        document.getElementById('analyticsReplyRate').textContent = `${data.reply_rate}%`;
-        document.getElementById('analyticsFailureRate').textContent = `${data.failure_rate}%`;
+        // Update stats (guard against missing data)
+        const totalEl = document.getElementById('analyticsTotal');
+        const replyRateEl = document.getElementById('analyticsReplyRate');
+        const failureRateEl = document.getElementById('analyticsFailureRate');
+        if (totalEl) totalEl.textContent = data.total_leads ?? 0;
+        if (replyRateEl) replyRateEl.textContent = `${data.reply_rate ?? 0}%`;
+        if (failureRateEl) failureRateEl.textContent = `${data.failure_rate ?? 0}%`;
 
         // Update status chart
+        const dist = data.status_distribution || {};
         if (statusChart) {
             statusChart.data.datasets[0].data = [
-                data.status_distribution.pending,
-                data.status_distribution.sent,
-                data.status_distribution.replied,
-                data.status_distribution.failed
+                dist.pending ?? 0,
+                dist.sent ?? 0,
+                dist.replied ?? 0,
+                dist.failed ?? 0
             ];
             statusChart.update();
         }
 
         // Update timeline chart
-        if (timelineChart && data.daily_stats) {
+        if (timelineChart && data.daily_stats && Array.isArray(data.daily_stats)) {
             timelineChart.data.labels = data.daily_stats.map(d => d.date);
             timelineChart.data.datasets[0].data = data.daily_stats.map(d => d.sent);
             timelineChart.data.datasets[1].data = data.daily_stats.map(d => d.replied);

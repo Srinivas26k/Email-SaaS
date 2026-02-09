@@ -7,7 +7,6 @@ from typing import Optional
 from backend.config import config
 from backend.database import SessionLocal, Lead, Campaign, Log, LeadStatus, CampaignStatus
 from backend.email_sender import EmailSender
-from backend.templates import render_template
 
 
 class BackgroundWorker:
@@ -136,27 +135,16 @@ class BackgroundWorker:
                 CustomTemplate.template_type == template_type
             ).first()
             
-            if custom_template:
-                # Use custom template with flexible rendering
-                from backend.template_renderer import render_custom_template
-                
-                rendered = render_custom_template(
-                    custom_template.subject,
-                    custom_template.body,
-                    lead_data
-                )
-            else:
-                # Fallback to hardcoded templates for backwards compatibility
-                industry = lead_data.get("industry", "healthcare")
-                variables = {
-                    "first_name": lead_data.get("first_name", "there"),
-                    "company": lead_data.get("company", "your company"),
-                    "industry": industry
-                }
-                
-                # Use old template system
-                rendered = render_template(industry, template_type, variables)
-            
+            if not custom_template:
+                print(f"⚠️ No template configured for {template_type} - add templates in Templates page")
+                return
+
+            from backend.template_renderer import render_custom_template
+            rendered = render_custom_template(
+                custom_template.subject,
+                custom_template.body,
+                lead_data
+            )
             # Send email
             success = self.email_sender.send_email(
                 lead.email,
