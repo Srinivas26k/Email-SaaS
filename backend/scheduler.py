@@ -1,17 +1,23 @@
-"""Production-ready background scheduler for 24/7 email operations."""
-import time
+"""Background scheduler for 24/7 email operations with multi-account support."""
 import logging
 from datetime import datetime, timedelta
 from typing import Optional
+
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
-from backend.config import config
 from backend.database import SessionLocal, Lead, Campaign, Log, LeadStatus, CampaignStatus
 from backend.email_sender import EmailSender
 from backend.reply_checker import ReplyChecker
 from backend.daily_report import DailyReportGenerator
 from backend.template_renderer import render_custom_template
+from backend.settings_service import (
+    get_app_settings,
+    get_next_sending_account,
+    increment_account_sent_today,
+    reset_all_accounts_sent_today,
+)
+
 import json
 
 logging.basicConfig(level=logging.INFO)
@@ -20,116 +26,97 @@ logger = logging.getLogger(__name__)
 
 class EmailScheduler:
     """Handles all background tasks with proper scheduling."""
-    
+
     def __init__(self):
         self.scheduler = BackgroundScheduler()
-        self.email_sender = EmailSender()
         self.reply_checker = ReplyChecker()
-        self.report_generator = DailyReportGenerator()
         self.running = False
-    
+
     def start(self):
-        """Start all scheduled tasks."""
         if self.running:
             logger.warning("Scheduler already running")
             return
-        
-        # Task 1: Send emails every 30 seconds
         self.scheduler.add_job(
             func=self.process_email_queue,
             trigger=IntervalTrigger(seconds=30),
-            id='email_sender',
-            name='Process email queue',
-            replace_existing=True
+            id="email_sender",
+            name="Process email queue",
+            replace_existing=True,
         )
-        
-        # Task 2: Check replies every 5 minutes
         self.scheduler.add_job(
             func=self.check_for_replies,
             trigger=IntervalTrigger(minutes=5),
-            id='reply_checker',
-            name='Check for email replies',
-            replace_existing=True
+            id="reply_checker",
+            name="Check for email replies",
+            replace_existing=True,
         )
-        
-        # Task 3: Reset daily counter at midnight
         self.scheduler.add_job(
             func=self.reset_daily_counter,
-            trigger='cron',
+            trigger="cron",
             hour=0,
             minute=0,
-            id='daily_reset',
-            name='Reset daily email counter',
-            replace_existing=True
+            id="daily_reset",
+            name="Reset daily email counter",
+            replace_existing=True,
         )
-        
-        # Task 4: Send daily report at midnight (1 AM)
         self.scheduler.add_job(
             func=self.send_daily_report,
-            trigger='cron',
-            hour=1,  # 1 AM
+            trigger="cron",
+            hour=1,
             minute=0,
-            id='daily_report',
-            name='Send daily analytics report',
-            replace_existing=True
+            id="daily_report",
+            name="Send daily analytics report",
+            replace_existing=True,
         )
-        
         self.scheduler.start()
         self.running = True
-        logger.info("🚀 Scheduler started - all background tasks active")
-    
+        logger.info("Scheduler started - email queue and reply checker active")
+
     def stop(self):
-        """Stop all scheduled tasks."""
         if self.scheduler.running:
             self.scheduler.shutdown(wait=False)
             self.running = False
-            logger.info("⏹️ Scheduler stopped")
-    
+        logger.info("Scheduler stopped")
+
     def process_email_queue(self):
-        """Process pending emails (runs every 30 seconds)."""
         session = SessionLocal()
         try:
-            # Get campaign
             campaign = session.query(Campaign).first()
             if not campaign or campaign.status != CampaignStatus.RUNNING:
                 return
-            
-            # Check daily limit
-            if campaign.sent_today >= config.DAILY_EMAIL_LIMIT:
-                logger.info(f"⏸️ Daily limit reached ({campaign.sent_today}/{config.DAILY_EMAIL_LIMIT})")
+            settings = get_app_settings()
+            daily_limit = int(settings.get("daily_email_limit", "500"))
+            if campaign.sent_today >= daily_limit:
                 return
-            
-            # Get next lead
+
+            account = get_next_sending_account()
+            if not account:
+                return
+
             lead = self._get_next_lead(session)
             if not lead:
                 return
-            
-            # Send email
-            self._send_to_lead(session, lead, campaign)
-            
+
+            self._send_to_lead(session, lead, campaign, account)
         except Exception as e:
-            logger.error(f"❌ Error in email queue: {str(e)}", exc_info=True)
+            logger.error("Error in email queue: %s", e, exc_info=True)
         finally:
             session.close()
-    
+
     def check_for_replies(self):
-        """Check for email replies (runs every 5 minutes)."""
         try:
-            logger.info("📬 Checking for replies...")
             self.reply_checker.check_replies()
         except Exception as e:
-            logger.error(f"❌ Error checking replies: {str(e)}", exc_info=True)
-    
+            logger.error("Error checking replies: %s", e, exc_info=True)
+
     def send_daily_report(self):
-        """Send daily analytics report (runs at 1 AM)."""
         try:
-            logger.info("📊 Generating and sending daily report...")
-            self.report_generator.send_daily_report()
+            gen = DailyReportGenerator()
+            gen.send_daily_report()
         except Exception as e:
-            logger.error(f"❌ Error sending daily report: {str(e)}", exc_info=True)
-    
+            logger.error("Error sending daily report: %s", e, exc_info=True)
+
     def reset_daily_counter(self):
-        """Reset daily email counter at midnight."""
         session = SessionLocal()
         try:
             campaign = session.query(Campaign).first()
@@ -138,103 +125,103 @@ class EmailScheduler:
                 campaign.sent_today = 0
                 campaign.last_reset_date = today
                 session.commit()
-                logger.info(f"🔄 Daily counter reset for {today}")
+            reset_all_accounts_sent_today()
         except Exception as e:
-            logger.error(f"❌ Error resetting counter: {str(e)}")
+            logger.error("Error resetting counter: %s", e)
         finally:
             session.close()
-    
+
     def _get_next_lead(self, session) -> Optional[Lead]:
-        """Get the next lead to send email to."""
         now = datetime.utcnow()
-        
-        # Priority 1: New leads
-        lead = session.query(Lead).filter(
-            Lead.status == LeadStatus.PENDING
-        ).first()
-        
+        lead = (
+            session.query(Lead)
+            .filter(Lead.status == LeadStatus.PENDING)
+            .first()
+        )
         if lead:
             return lead
-        
-        # Priority 2: Follow-ups (3+ days since last send)
         followup_cutoff = now - timedelta(days=3)
-        lead = session.query(Lead).filter(
-            Lead.status == LeadStatus.SENT,
-            Lead.followup_count < 2,
-            Lead.last_sent_at <= followup_cutoff
-        ).first()
-        
+        lead = (
+            session.query(Lead)
+            .filter(
+                Lead.status == LeadStatus.SENT,
+                Lead.followup_count < 2,
+                Lead.last_sent_at <= followup_cutoff,
+            )
+            .first()
+        )
         return lead
-    
-    def _send_to_lead(self, session, lead: Lead, campaign: Campaign):
-        """Send email to a specific lead."""
+
+    def _send_to_lead(self, session, lead: Lead, campaign: Campaign, account):
         try:
             lead_data = json.loads(lead.data_json) if lead.data_json else {}
-            
-            # Determine template type
             if lead.followup_count == 0:
                 template_type = "initial"
             elif lead.followup_count == 1:
                 template_type = "followup1"
             else:
                 template_type = "followup2"
-            
-            # Get custom template
+
             from backend.database import CustomTemplate
-            custom_template = session.query(CustomTemplate).filter(
-                CustomTemplate.template_type == template_type
-            ).first()
-            
+
+            custom_template = (
+                session.query(CustomTemplate)
+                .filter(CustomTemplate.template_type == template_type)
+                .first()
+            )
             if custom_template:
                 rendered = render_custom_template(
-                    custom_template.subject,
-                    custom_template.body,
-                    lead_data
+                    custom_template.subject, custom_template.body, lead_data
                 )
             else:
-                # Fallback
                 from backend.templates import render_template
+
                 industry = lead_data.get("industry", "healthcare")
-                variables = {
-                    "first_name": lead_data.get("first_name", "there"),
-                    "company": lead_data.get("company", "your company"),
-                    "industry": industry
-                }
-                rendered = render_template(industry, template_type, variables)
-            
-            # Send email
-            success = self.email_sender.send_email(
-                lead.email,
-                rendered["subject"],
-                rendered["body"]
+                rendered = render_template(
+                    industry,
+                    template_type,
+                    {
+                        "first_name": lead_data.get("first_name", "there"),
+                        "company": lead_data.get("company", "your company"),
+                        "industry": industry,
+                    },
+                )
+
+            sender = EmailSender(account=account)
+            success = sender.send_email(
+                lead.email, rendered["subject"], rendered["body"]
             )
-            
             if success:
                 lead.status = LeadStatus.SENT
                 lead.last_sent_at = datetime.utcnow()
                 lead.followup_count += 1
+                lead.email_account_id = account.id
                 campaign.sent_today += 1
-                
-                log = Log(
-                    email=lead.email,
-                    event=f"Sent {template_type} email to {lead.email}"
+                session.add(
+                    Log(
+                        email=lead.email,
+                        event=f"Sent {template_type} to {lead.email}",
+                    )
                 )
-                session.add(log)
                 session.commit()
-                
-                logger.info(f"✅ Sent {template_type} to {lead.email} ({campaign.sent_today}/{config.DAILY_EMAIL_LIMIT})")
+                increment_account_sent_today(account.id)
+                settings = get_app_settings()
+                daily_limit = int(settings.get("daily_email_limit", "500"))
+                logger.info(
+                    "Sent %s to %s (%s/%s)",
+                    template_type,
+                    lead.email,
+                    campaign.sent_today,
+                    daily_limit,
+                )
             else:
                 lead.status = LeadStatus.FAILED
-                log = Log(
-                    email=lead.email,
-                    event=f"Failed to send email to {lead.email}"
+                session.add(
+                    Log(email=lead.email, event=f"Failed to send to {lead.email}")
                 )
-                session.add(log)
                 session.commit()
-                
         except Exception as e:
-            logger.error(f"❌ Error sending to {lead.email}: {str(e)}")
+            logger.error("Error sending to %s: %s", lead.email, e)
 
 
-# Global scheduler instance
 email_scheduler = EmailScheduler()

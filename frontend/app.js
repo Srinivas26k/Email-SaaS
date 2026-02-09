@@ -46,6 +46,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Hash navigation
     const hash = window.location.hash.slice(1) || 'dashboard';
     navigateTo(hash);
+    if (typeof lucide !== 'undefined') lucide.createIcons();
 });
 
 // ============ NAVIGATION ============
@@ -71,6 +72,7 @@ function navigateTo(page) {
 
         // Load page-specific data
         loadPageData(page);
+        if (typeof lucide !== 'undefined') lucide.createIcons();
     }
 }
 
@@ -765,17 +767,180 @@ async function loadSettings() {
         const response = await fetch(`${API_BASE}/api/settings`);
         const data = await response.json();
 
-        document.getElementById('settingsEmail').value = data.email || '';
-        document.getElementById('settingsSMTP').value = `${data.smtp_server}:${data.smtp_port}` || '';
-        document.getElementById('settingsCalendar').value = data.calendar_link || '';
-        document.getElementById('settingsDailyLimit').value = data.daily_limit || '';
-        document.getElementById('settingsDelay').value = `${data.min_delay}-${data.max_delay}` || '';
-        document.getElementById('settingsPauseEvery').value = data.pause_every_n || '';
-        document.getElementById('settingsLicense').value = data.license_key || '';
+        const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v || ''; };
+        set('settingsLicenseSheetUrl', data.license_sheet_url);
+        set('settingsLicenseKey', data.license_key);
+        set('settingsDailyLimit', data.daily_limit);
+        set('settingsMinDelay', data.min_delay);
+        set('settingsMaxDelay', data.max_delay);
+        set('settingsPauseEvery', data.pause_every_n);
+        set('settingsPauseMin', data.pause_min_minutes);
+        set('settingsPauseMax', data.pause_max_minutes);
+        set('settingsCalendarLink', data.calendar_link);
 
+        renderEmailAccountsList(data.email_accounts || []);
     } catch (error) {
         console.error('Failed to load settings:', error);
     }
+}
+
+function renderEmailAccountsList(accounts) {
+    const container = document.getElementById('emailAccountsList');
+    if (!container) return;
+    if (!accounts || accounts.length === 0) {
+        container.innerHTML = '<p class="no-data">No email accounts yet. Add one below.</p>';
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+        return;
+    }
+    container.innerHTML = accounts.map(acc => `
+        <div class="email-account-card" data-id="${acc.id}">
+            <div class="acc-header">
+                <strong>${escapeHtml(acc.label || acc.email)}</strong>
+                <span class="acc-email">${escapeHtml(acc.email)}</span>
+                ${acc.is_active ? '<span class="acc-badge active">Active</span>' : '<span class="acc-badge inactive">Inactive</span>'}
+            </div>
+            <div class="acc-details">
+                SMTP ${acc.smtp_server}:${acc.smtp_port} · IMAP ${acc.imap_server}:${acc.imap_port}
+                ${acc.sent_today !== undefined ? ` · Sent today: ${acc.sent_today}` : ''}
+            </div>
+            <div class="acc-actions">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="testAccountConnection(${acc.id}, this)">
+                    <i data-lucide="plug" class="btn-icon" aria-hidden="true"></i> Test connection
+                </button>
+                <span class="test-result" id="testResult-${acc.id}"></span>
+                <button type="button" class="btn btn-danger btn-sm" onclick="deleteEmailAccount(${acc.id})">
+                    <i data-lucide="trash-2" class="btn-icon" aria-hidden="true"></i> Remove
+                </button>
+            </div>
+        </div>
+    `).join('');
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+async function testAccountConnection(accountId, btn) {
+    const resultEl = document.getElementById(`testResult-${accountId}`);
+    if (resultEl) { resultEl.textContent = 'Checking...'; resultEl.className = 'test-result pending'; }
+    if (btn) btn.disabled = true;
+    try {
+        const response = await fetch(`${API_BASE}/api/email-accounts/${accountId}/test`, { method: 'POST' });
+        const data = await response.json();
+        const smtp = data.smtp || {};
+        const imap = data.imap || {};
+        const ok = smtp.ok && imap.ok;
+        const msg = ok ? 'Connected' : [smtp.ok ? '' : `SMTP: ${smtp.message || 'Failed'}`, imap.ok ? '' : `IMAP: ${imap.message || 'Failed'}`].filter(Boolean).join('; ') || 'Connected';
+        if (resultEl) {
+            resultEl.textContent = msg;
+            resultEl.className = 'test-result ' + (ok ? 'success' : 'error');
+        }
+    } catch (e) {
+        if (resultEl) { resultEl.textContent = 'Request failed'; resultEl.className = 'test-result error'; }
+    }
+    if (btn) btn.disabled = false;
+}
+
+async function testNewAccountConnection() {
+    const resultEl = document.getElementById('newAccountTestResult');
+    const email = document.getElementById('newAccountEmail')?.value?.trim();
+    const password = document.getElementById('newAccountPassword')?.value;
+    if (!email || !password) { showNotification('Enter email and app password', 'error'); return; }
+    if (resultEl) { resultEl.textContent = 'Checking...'; resultEl.className = 'test-result pending'; }
+    try {
+        const response = await fetch(`${API_BASE}/api/email-accounts/test`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                email,
+                password,
+                smtp_server: document.getElementById('newAccountSmtpServer')?.value || 'smtp.gmail.com',
+                smtp_port: parseInt(document.getElementById('newAccountSmtpPort')?.value || '587', 10),
+                imap_server: document.getElementById('newAccountImapServer')?.value || 'imap.gmail.com',
+                imap_port: parseInt(document.getElementById('newAccountImapPort')?.value || '993', 10)
+            })
+        });
+        const data = await response.json();
+        const smtp = data.smtp || {};
+        const imap = data.imap || {};
+        const ok = smtp.ok && imap.ok;
+        const msg = ok ? 'Connected' : [smtp.ok ? '' : `SMTP: ${smtp.message || 'Failed'}`, imap.ok ? '' : `IMAP: ${imap.message || 'Failed'}`].filter(Boolean).join('; ') || 'Connected';
+        if (resultEl) {
+            resultEl.textContent = msg;
+            resultEl.className = 'test-result ' + (ok ? 'success' : 'error');
+        }
+    } catch (e) {
+        if (resultEl) { resultEl.textContent = 'Request failed'; resultEl.className = 'test-result error'; }
+    }
+}
+
+async function addEmailAccount() {
+    const label = document.getElementById('newAccountLabel')?.value?.trim();
+    const email = document.getElementById('newAccountEmail')?.value?.trim();
+    const password = document.getElementById('newAccountPassword')?.value;
+    if (!email || !password) { showNotification('Email and app password required', 'error'); return; }
+    try {
+        const response = await fetch(`${API_BASE}/api/email-accounts`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                label: label || email,
+                email,
+                password,
+                smtp_server: document.getElementById('newAccountSmtpServer')?.value || 'smtp.gmail.com',
+                smtp_port: parseInt(document.getElementById('newAccountSmtpPort')?.value || '587', 10),
+                imap_server: document.getElementById('newAccountImapServer')?.value || 'imap.gmail.com',
+                imap_port: parseInt(document.getElementById('newAccountImapPort')?.value || '993', 10)
+            })
+        });
+        const data = await response.json();
+        if (data.success) {
+            showNotification('Account added', 'success');
+            document.getElementById('newAccountPassword').value = '';
+            loadSettings();
+        } else {
+            showNotification(data.detail || 'Failed to add account', 'error');
+        }
+    } catch (e) {
+        showNotification('Error: ' + e.message, 'error');
+    }
+}
+
+async function deleteEmailAccount(accountId) {
+    if (!confirm('Remove this email account? Leads sent from it will keep working.')) return;
+    try {
+        const response = await fetch(`${API_BASE}/api/email-accounts/${accountId}`, { method: 'DELETE' });
+        const data = await response.json();
+        if (data.success) { showNotification('Account removed', 'success'); loadSettings(); }
+        else showNotification(data.detail || 'Failed', 'error');
+    } catch (e) {
+        showNotification('Error: ' + e.message, 'error');
+    }
+}
+
+async function saveAppSettings(event) {
+    if (event) event.preventDefault();
+    try {
+        const payload = {
+            license_sheet_url: document.getElementById('settingsLicenseSheetUrl')?.value?.trim() || '',
+            license_key: document.getElementById('settingsLicenseKey')?.value?.trim() || '',
+            daily_email_limit: document.getElementById('settingsDailyLimit')?.value?.trim() || '500',
+            min_delay_seconds: document.getElementById('settingsMinDelay')?.value?.trim() || '60',
+            max_delay_seconds: document.getElementById('settingsMaxDelay')?.value?.trim() || '120',
+            pause_every_n_emails: document.getElementById('settingsPauseEvery')?.value?.trim() || '20',
+            pause_min_minutes: document.getElementById('settingsPauseMin')?.value?.trim() || '5',
+            pause_max_minutes: document.getElementById('settingsPauseMax')?.value?.trim() || '8',
+            calendar_link: document.getElementById('settingsCalendarLink')?.value?.trim() || ''
+        };
+        const response = await fetch(`${API_BASE}/api/settings`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await response.json();
+        if (data.success) { showNotification('Settings saved', 'success'); }
+        else showNotification(data.detail || 'Failed to save', 'error');
+    } catch (e) {
+        showNotification('Error: ' + e.message, 'error');
+    }
+    return false;
 }
 
 // ============ UTILITIES ============

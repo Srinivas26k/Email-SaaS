@@ -1,90 +1,80 @@
-"""License validation system using Google Sheets."""
+"""License validation using Google Sheets. Supports DB settings (no .env required)."""
 import requests
 import pandas as pd
 from datetime import datetime
-from backend.config import config
+
+from backend.config import config as env_config
 
 
 class LicenseValidationError(Exception):
-    """Raised when license validation fails."""
     pass
 
 
-def validate_license(license_key: str = None) -> bool:
+def _get_license_config():
+    """Get license_sheet_url and license_key from DB first, then env."""
+    try:
+        from backend.settings_service import get_app_settings
+        settings = get_app_settings()
+        url = (settings.get("license_sheet_url") or "").strip()
+        key = (settings.get("license_key") or "").strip()
+        if url or key:
+            return url, key
+    except Exception:
+        pass
+    return (getattr(env_config, "LICENSE_SHEET_URL", None) or "").strip(), (
+        getattr(env_config, "LICENSE_KEY", None) or ""
+    ).strip()
+
+
+def validate_license(license_key: str = None, license_sheet_url: str = None) -> bool:
     """
     Validate license by fetching Google Sheet CSV.
-    
-    Args:
-        license_key: License key to validate. If None, uses config.LICENSE_KEY
-        
-    Returns:
-        True if license is valid
-        
-    Raises:
-        LicenseValidationError: If license is invalid or validation fails
+    Uses DB settings then env for URL and key if not passed.
     """
-    key = license_key or config.LICENSE_KEY
-    
+    sheet_url = license_sheet_url
+    key = license_key
+    if sheet_url is None or key is None:
+        url_from_config, key_from_config = _get_license_config()
+        if sheet_url is None:
+            sheet_url = url_from_config
+        if key is None:
+            key = key_from_config
+
     if not key:
         raise LicenseValidationError("No license key provided")
-    
-    if not config.LICENSE_SHEET_URL:
+    if not sheet_url:
         raise LicenseValidationError("License sheet URL not configured")
-    
+
     try:
-        # Fetch Google Sheet CSV
-        response = requests.get(config.LICENSE_SHEET_URL, timeout=10)
+        response = requests.get(sheet_url, timeout=10)
         response.raise_for_status()
-        
-        # Parse CSV
         from io import StringIO
         df = pd.read_csv(StringIO(response.text))
-        
-        # Validate required columns
         required_columns = ["license_key", "status", "expiry_date"]
-        missing_columns = [col for col in required_columns if col not in df.columns]
-        if missing_columns:
+        missing = [c for c in required_columns if c not in df.columns]
+        if missing:
             raise LicenseValidationError(
-                f"License sheet missing required columns: {', '.join(missing_columns)}"
+                f"License sheet missing columns: {', '.join(missing)}"
             )
-        
-        # Find license key
         license_row = df[df["license_key"] == key]
-        
         if license_row.empty:
-            raise LicenseValidationError(f"License key '{key}' not found")
-        
-        # Get first matching row
+            raise LicenseValidationError(f"License key not found")
         license_data = license_row.iloc[0]
-        
-        # Check status
         status = str(license_data["status"]).strip().upper()
         if status != "ACTIVE":
-            raise LicenseValidationError(f"License status is '{status}', must be 'ACTIVE'")
-        
-        # Check expiry date
+            raise LicenseValidationError(f"License status is '{status}', must be ACTIVE")
         expiry_str = str(license_data["expiry_date"]).strip()
-        try:
-            # Try multiple date formats
-            for date_format in ["%Y-%m-%d", "%m/%d/%Y", "%d/%m/%Y", "%Y/%m/%d"]:
-                try:
-                    expiry_date = datetime.strptime(expiry_str, date_format)
-                    break
-                except ValueError:
-                    continue
-            else:
-                raise ValueError("No valid date format found")
-            
-            if expiry_date < datetime.now():
-                raise LicenseValidationError(
-                    f"License expired on {expiry_date.strftime('%Y-%m-%d')}"
-                )
-                
-        except ValueError:
-            raise LicenseValidationError(f"Invalid expiry date format: '{expiry_str}'")
-        
+        for fmt in ["%Y-%m-%d", "%m/%d/%Y", "%d/%m/%Y", "%Y/%m/%d"]:
+            try:
+                expiry_date = datetime.strptime(expiry_str, fmt)
+                break
+            except ValueError:
+                continue
+        else:
+            raise LicenseValidationError(f"Invalid expiry date: {expiry_str}")
+        if expiry_date < datetime.now():
+            raise LicenseValidationError(f"License expired on {expiry_date.strftime('%Y-%m-%d')}")
         return True
-        
     except requests.RequestException as e:
         raise LicenseValidationError(f"Failed to fetch license sheet: {str(e)}")
     except Exception as e:
@@ -94,12 +84,15 @@ def validate_license(license_key: str = None) -> bool:
 
 
 def validate_on_startup():
-    """Validate license on application startup."""
+    """Validate license on startup. If no license configured (DB or env), allow startup."""
+    url, key = _get_license_config()
+    if not url or not key:
+        print("License not configured. Configure in Settings to enable campaigns.")
+        return True
     try:
-        validate_license()
-        print("✅ License validated successfully")
+        validate_license(license_key=key, license_sheet_url=url)
+        print("License validated successfully")
         return True
     except LicenseValidationError as e:
-        print(f"❌ LICENSE VALIDATION FAILED: {str(e)}")
-        print("Application cannot start without valid license")
-        raise
+        print(f"License validation failed: {e}. Configure in Settings.")
+        return True  # Allow startup; user can fix in UI

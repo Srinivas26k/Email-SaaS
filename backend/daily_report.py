@@ -5,7 +5,8 @@ from typing import Dict, List
 from sqlalchemy import func
 
 from backend.database import SessionLocal, Lead, Log, Campaign, LeadStatus
-from backend.config import config
+from backend.config import config as env_config
+from backend.settings_service import get_app_settings, get_email_accounts
 from backend.email_sender import EmailSender
 
 
@@ -90,8 +91,8 @@ class DailyReportGenerator:
                     'sent': today_sent,
                     'replied': today_replied,
                     'failed': today_failed,
-                    'daily_limit': config.DAILY_EMAIL_LIMIT,
-                    'usage_percent': (today_sent / config.DAILY_EMAIL_LIMIT * 100) if config.DAILY_EMAIL_LIMIT > 0 else 0
+                    'daily_limit': int(get_app_settings().get("daily_email_limit", "500")),
+                    'usage_percent': (today_sent / max(1, int(get_app_settings().get("daily_email_limit", "500"))) * 100)
                 },
                 'overall': {
                     'total_leads': total_leads,
@@ -372,7 +373,8 @@ class DailyReportGenerator:
         try:
             # Use configured email if not specified
             if not to_email:
-                to_email = config.EMAIL_ADDRESS
+                accounts = get_email_accounts(active_only=True)
+                to_email = accounts[0].email if accounts else getattr(env_config, "EMAIL_ADDRESS", "") or ""
             
             print(f"📊 Generating daily report for {to_email}...")
             

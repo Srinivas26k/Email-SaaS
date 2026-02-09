@@ -14,6 +14,16 @@ from sqlalchemy import or_
 
 from backend.config import config
 from backend.database import init_db, get_db, Lead, Campaign, Log, LeadStatus, CampaignStatus
+from backend.settings_service import (
+    get_app_settings,
+    save_app_settings,
+    get_email_accounts,
+    create_email_account,
+    update_email_account,
+    delete_email_account,
+    test_smtp_connection,
+    test_imap_connection,
+)
 from backend.license_validator import validate_on_startup
 from backend.scheduler import email_scheduler
 
@@ -33,29 +43,21 @@ app.add_middleware(
 @app.on_event("startup")
 async def startup_event():
     """Application startup tasks."""
-    print("🚀 Starting Email Outreach System...")
-    
-    # Validate license (blocks startup if invalid)
+    print("Starting Email Outreach System...")
     validate_on_startup()
-    
-    # Initialize database
     init_db()
-    print("✅ Database initialized")
-    
-    # Start APScheduler (handles ALL background tasks in parallel)
-    # This replaces the old threading approach
+    print("Database initialized")
     email_scheduler.start()
-    print("✅ Email scheduler started (sends emails + checks replies in parallel)")
-    
-    print("🎉 System ready!")
+    print("Scheduler started (email queue + reply checker)")
+    print("System ready.")
 
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """Application shutdown tasks."""
-    print("⏹️ Shutting down...")
+    print("Shutting down...")
     email_scheduler.stop()
-    print("✅ Scheduler stopped gracefully")
+    print("Scheduler stopped.")
 
 
 # ==================== HEALTH CHECK ====================
@@ -211,9 +213,11 @@ async def get_metrics(db: Session = Depends(get_db)):
     failed_count = db.query(Lead).filter(Lead.status == LeadStatus.FAILED).count()
     pending_count = db.query(Lead).filter(Lead.status == LeadStatus.PENDING).count()
     
+    settings = get_app_settings()
+    daily_limit = int(settings.get("daily_email_limit", "500"))
     return {
         "sent_today": campaign.sent_today if campaign else 0,
-        "daily_limit": config.DAILY_EMAIL_LIMIT,
+        "daily_limit": daily_limit,
         "replies": replied_count,
         "failed": failed_count,
         "total_leads": total_leads,
@@ -590,25 +594,151 @@ async def get_analytics(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# Settings APIs
+# Settings APIs (all config in UI; no .env required)
 
 @app.get("/api/settings")
 async def get_settings():
-    """Get current settings."""
+    """Get app settings and email accounts (passwords masked)."""
+    s = get_app_settings()
+    accounts = get_email_accounts(active_only=False)
     return {
-        "email": config.EMAIL_ADDRESS,
-        "smtp_server": config.SMTP_SERVER,
-        "smtp_port": config.SMTP_PORT,
-        "imap_server": config.IMAP_SERVER,
-        "imap_port": config.IMAP_PORT,
-        "daily_limit": config.DAILY_EMAIL_LIMIT,
-        "min_delay": config.MIN_DELAY_SECONDS,
-        "max_delay": config.MAX_DELAY_SECONDS,
-        "pause_every_n": config.PAUSE_EVERY_N_EMAILS,
-        "pause_min_minutes": config.PAUSE_MIN_MINUTES,
-        "pause_max_minutes": config.PAUSE_MAX_MINUTES,
-        "calendar_link": config.CALENDAR_LINK,
-        "license_key": config.LICENSE_KEY[:8] + "*" * 20 if config.LICENSE_KEY else None
+        "license_sheet_url": s.get("license_sheet_url", ""),
+        "license_key": s.get("license_key", ""),
+        "daily_limit": s.get("daily_email_limit", "500"),
+        "min_delay": s.get("min_delay_seconds", "60"),
+        "max_delay": s.get("max_delay_seconds", "120"),
+        "pause_every_n": s.get("pause_every_n_emails", "20"),
+        "pause_min_minutes": s.get("pause_min_minutes", "5"),
+        "pause_max_minutes": s.get("pause_max_minutes", "8"),
+        "calendar_link": s.get("calendar_link", ""),
+        "email_accounts": [
+            {
+                "id": a.id,
+                "label": a.label,
+                "email": a.email,
+                "smtp_server": a.smtp_server,
+                "smtp_port": a.smtp_port,
+                "imap_server": a.imap_server,
+                "imap_port": a.imap_port,
+                "is_active": a.is_active,
+                "sent_today": a.sent_today or 0,
+            }
+            for a in accounts
+        ],
+    }
+
+
+@app.post("/api/settings")
+async def save_settings(settings: dict):
+    """Save app settings (from Settings page)."""
+    allowed = {
+        "license_sheet_url", "license_key", "daily_email_limit",
+        "min_delay_seconds", "max_delay_seconds", "pause_every_n_emails",
+        "pause_min_minutes", "pause_max_minutes", "calendar_link",
+    }
+    to_save = {k: str(v).strip() for k, v in (settings or {}).items() if k in allowed}
+    save_app_settings(to_save)
+    return {"success": True, "message": "Settings saved"}
+
+
+@app.get("/api/email-accounts")
+async def list_email_accounts():
+    """List email accounts (no passwords)."""
+    accounts = get_email_accounts(active_only=False)
+    return {
+        "accounts": [
+            {
+                "id": a.id,
+                "label": a.label,
+                "email": a.email,
+                "smtp_server": a.smtp_server,
+                "smtp_port": a.smtp_port,
+                "imap_server": a.imap_server,
+                "imap_port": a.imap_port,
+                "is_active": a.is_active,
+                "sent_today": a.sent_today or 0,
+            }
+            for a in accounts
+        ]
+    }
+
+
+@app.post("/api/email-accounts")
+async def add_email_account(data: dict):
+    """Add an email account."""
+    try:
+        acc = create_email_account(
+            label=data.get("label", "").strip() or data.get("email", ""),
+            email=data["email"],
+            password=data["password"],
+            smtp_server=data.get("smtp_server", "smtp.gmail.com"),
+            smtp_port=int(data.get("smtp_port", 587)),
+            imap_server=data.get("imap_server", "imap.gmail.com"),
+            imap_port=int(data.get("imap_port", 993)),
+        )
+        return {"success": True, "id": acc.id, "message": "Account added"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.put("/api/email-accounts/{account_id}")
+async def edit_email_account(account_id: int, data: dict):
+    """Update an email account."""
+    acc = update_email_account(
+        account_id,
+        label=data.get("label"),
+        email=data.get("email"),
+        password=data.get("password") or None,
+        smtp_server=data.get("smtp_server"),
+        smtp_port=data.get("smtp_port"),
+        imap_server=data.get("imap_server"),
+        imap_port=data.get("imap_port"),
+        is_active=data.get("is_active"),
+    )
+    if not acc:
+        raise HTTPException(status_code=404, detail="Account not found")
+    return {"success": True, "message": "Account updated"}
+
+
+@app.delete("/api/email-accounts/{account_id}")
+async def remove_email_account(account_id: int):
+    """Delete an email account."""
+    if not delete_email_account(account_id):
+        raise HTTPException(status_code=404, detail="Account not found")
+    return {"success": True, "message": "Account deleted"}
+
+
+@app.post("/api/email-accounts/test")
+async def test_email_account_connection(data: dict):
+    """Test SMTP and IMAP for provided credentials (e.g. when adding new account)."""
+    email_addr = (data.get("email") or "").strip()
+    password = data.get("password", "")
+    smtp_server = (data.get("smtp_server") or "smtp.gmail.com").strip()
+    smtp_port = int(data.get("smtp_port", 587))
+    imap_server = (data.get("imap_server") or "imap.gmail.com").strip()
+    imap_port = int(data.get("imap_port", 993))
+    if not email_addr or not password:
+        raise HTTPException(status_code=400, detail="Email and password required")
+    out = {}
+    ok_smtp, msg_smtp = test_smtp_connection(email_addr, password, smtp_server, smtp_port)
+    out["smtp"] = {"ok": ok_smtp, "message": msg_smtp}
+    ok_imap, msg_imap = test_imap_connection(email_addr, password, imap_server, imap_port)
+    out["imap"] = {"ok": ok_imap, "message": msg_imap}
+    return out
+
+
+@app.post("/api/email-accounts/{account_id}/test")
+async def test_email_account_by_id(account_id: int):
+    """Test SMTP and IMAP for an existing account (uses stored credentials)."""
+    from backend.settings_service import get_email_account_by_id
+    acc = get_email_account_by_id(account_id)
+    if not acc:
+        raise HTTPException(status_code=404, detail="Account not found")
+    ok_smtp, msg_smtp = test_smtp_connection(acc.email, acc.password, acc.smtp_server, acc.smtp_port)
+    ok_imap, msg_imap = test_imap_connection(acc.email, acc.password, acc.imap_server, acc.imap_port)
+    return {
+        "smtp": {"ok": ok_smtp, "message": msg_smtp},
+        "imap": {"ok": ok_imap, "message": msg_imap},
     }
 
 
@@ -624,7 +754,9 @@ async def send_daily_report_now(email: str = None):
         success = generator.send_daily_report(email)
         
         if success:
-            return {"success": True, "message": f"Report sent to {email or config.EMAIL_ADDRESS}"}
+            accs = get_email_accounts(active_only=True)
+            default_to = accs[0].email if accs else ""
+            return {"success": True, "message": f"Report sent to {email or default_to}"}
         else:
             raise HTTPException(status_code=500, detail="Failed to send report")
             

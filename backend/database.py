@@ -36,6 +36,7 @@ class Lead(Base):
     status = Column(Enum(LeadStatus), default=LeadStatus.PENDING, nullable=False)
     last_sent_at = Column(DateTime, nullable=True)
     followup_count = Column(Integer, default=0, nullable=False)
+    email_account_id = Column(Integer, nullable=True)  # which account sent to this lead (for reply matching)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
@@ -74,6 +75,34 @@ class Log(Base):
     timestamp = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
+class AppSettings(Base):
+    """Application settings (UI-configurable, no .env required)."""
+    __tablename__ = "app_settings"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    key = Column(String(100), unique=True, nullable=False)
+    value = Column(Text, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class EmailAccount(Base):
+    """SMTP/IMAP account for sending and receiving."""
+    __tablename__ = "email_accounts"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    label = Column(String(120), nullable=False)  # e.g. "Sales Gmail"
+    email = Column(String(255), nullable=False)
+    password = Column(String(500), nullable=False)  # app password
+    smtp_server = Column(String(255), nullable=False, default="smtp.gmail.com")
+    smtp_port = Column(Integer, nullable=False, default=587)
+    imap_server = Column(String(255), nullable=False, default="imap.gmail.com")
+    imap_port = Column(Integer, nullable=False, default=993)
+    is_active = Column(Integer, nullable=False, default=1)  # 1=active, 0=disabled
+    sent_today = Column(Integer, nullable=False, default=0)  # for round-robin distribution
+    last_used_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
 # Database engine and session
 engine = create_engine(
     config.DATABASE_URL.replace("sqlite:///", "sqlite:///"),
@@ -86,7 +115,6 @@ def init_db():
     """Initialize database tables."""
     Base.metadata.create_all(bind=engine)
     
-    # Create initial campaign if doesn't exist
     session = SessionLocal()
     try:
         campaign = session.query(Campaign).first()
@@ -96,6 +124,14 @@ def init_db():
             session.commit()
     finally:
         session.close()
+    # Migration: add email_account_id to leads if missing
+    try:
+        from sqlalchemy import text
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE leads ADD COLUMN email_account_id INTEGER"))
+            conn.commit()
+    except Exception:
+        pass  # column already exists
 
 
 def get_db():

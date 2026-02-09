@@ -7,9 +7,10 @@
     <title>Outreach Intelligence — Email SaaS</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/styles.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 </head>
 
 <body>
@@ -18,35 +19,35 @@
         <aside class="sidebar">
             <div class="sidebar-header">
                 <h1 class="logo">Outreach</h1>
-                <p class="logo-sub">Intelligence</p>
+                <p class="logo-sub">Email automation</p>
             </div>
             <nav class="sidebar-nav">
                 <a href="#dashboard" class="nav-item active" onclick="navigateTo('dashboard')">
-                    <span class="nav-icon">◉</span>
+                    <i data-lucide="layout-dashboard" class="nav-icon" aria-hidden="true"></i>
                     <span class="nav-text">Dashboard</span>
                 </a>
                 <a href="#leads" class="nav-item" onclick="navigateTo('leads')">
-                    <span class="nav-icon">◐</span>
+                    <i data-lucide="users" class="nav-icon" aria-hidden="true"></i>
                     <span class="nav-text">Leads</span>
                 </a>
                 <a href="#analytics" class="nav-item" onclick="navigateTo('analytics')">
-                    <span class="nav-icon">◈</span>
+                    <i data-lucide="bar-chart-2" class="nav-icon" aria-hidden="true"></i>
                     <span class="nav-text">Analytics</span>
                 </a>
                 <a href="#reports" class="nav-item" onclick="navigateTo('reports')">
-                    <span class="nav-icon">◔</span>
+                    <i data-lucide="file-text" class="nav-icon" aria-hidden="true"></i>
                     <span class="nav-text">Reports</span>
                 </a>
                 <a href="#logs" class="nav-item" onclick="navigateTo('logs')">
-                    <span class="nav-icon">◎</span>
+                    <i data-lucide="scroll-text" class="nav-icon" aria-hidden="true"></i>
                     <span class="nav-text">Logs</span>
                 </a>
                 <a href="#templates" class="nav-item" onclick="navigateTo('templates')">
-                    <span class="nav-icon">✉</span>
+                    <i data-lucide="mail" class="nav-icon" aria-hidden="true"></i>
                     <span class="nav-text">Templates</span>
                 </a>
                 <a href="#settings" class="nav-item" onclick="navigateTo('settings')">
-                    <span class="nav-icon">⚙</span>
+                    <i data-lucide="settings" class="nav-icon" aria-hidden="true"></i>
                     <span class="nav-text">Settings</span>
                 </a>
             </nav>
@@ -94,31 +95,40 @@
 
                 <!-- Command Center -->
                 <div class="command-section">
-                    <h2>Command Center</h2>
+                    <h2>Campaign</h2>
                     <div class="button-grid">
-                        <button class="btn btn-start" onclick="startCampaign()">▶ START</button>
-                        <button class="btn btn-pause" onclick="pauseCampaign()">⏸ PAUSE</button>
-                        <button class="btn btn-stop" onclick="stopCampaign()">⏹ STOP</button>
+                        <button type="button" class="btn btn-start" onclick="startCampaign()">
+                            <i data-lucide="play" class="btn-icon" aria-hidden="true"></i> Start
+                        </button>
+                        <button type="button" class="btn btn-pause" onclick="pauseCampaign()">
+                            <i data-lucide="pause" class="btn-icon" aria-hidden="true"></i> Pause
+                        </button>
+                        <button type="button" class="btn btn-stop" onclick="stopCampaign()">
+                            <i data-lucide="square" class="btn-icon" aria-hidden="true"></i> Stop
+                        </button>
                     </div>
                 </div>
 
                 <!-- Upload Leads -->
                 <div class="upload-section">
-                    <h2>Upload Leads</h2>
+                    <h2>Upload leads</h2>
                     <div class="upload-box">
                         <div class="upload-area" id="uploadArea">
-                            <p>📁 Drag and drop CSV file here, or click to browse</p>
+                            <i data-lucide="folder-up" class="upload-icon" aria-hidden="true"></i>
+                            <p>Drag and drop CSV here, or click to browse</p>
                             <input type="file" id="csvFile" accept=".csv" style="display: none;">
-                            <p class="upload-hint" id="uploadHint" style="margin-top: 10px; color: #666; font-size: 14px;"></p>
+                            <p class="upload-hint" id="uploadHint"></p>
                         </div>
-                        <button class="btn btn-upload" onclick="uploadLeads()">📤 UPLOAD CSV</button>
+                        <button type="button" class="btn btn-upload" onclick="uploadLeads()">
+                            <i data-lucide="upload" class="btn-icon" aria-hidden="true"></i> Upload CSV
+                        </button>
                     </div>
                 </div>
 
                 <!-- Replied / Meetings pipeline -->
                 <div class="pipeline-section">
-                    <h2>Replied &amp; meeting pipeline</h2>
-                    <p class="section-desc">Leads who replied — calendar link sent automatically</p>
+                    <h2>Replied and meeting pipeline</h2>
+                    <p class="section-desc">Leads who replied; calendar link is sent automatically</p>
                     <div class="pipeline-stats">
                         <div class="pipeline-stat">
                             <span class="pipeline-value" id="repliedCount">0</span>
@@ -289,7 +299,7 @@
                 <div class="template-grid">
                     <!-- Initial Email -->
                     <div class="template-column">
-                        <h3>📧 Initial Email</h3>
+                        <h3>Initial email</h3>
                         <label>Subject</label>
                         <input type="text" id="initialSubject" class="input-field" placeholder="Enter subject">
                         <label>Body</label>
@@ -300,7 +310,7 @@
 
                     <!-- Follow-up 1 -->
                     <div class="template-column">
-                        <h3>🔄 Follow-up 1 (after 3 days)</h3>
+                        <h3>Follow-up 1 (after 3 days)</h3>
                         <label>Subject</label>
                         <input type="text" id="followup1Subject" class="input-field" placeholder="Enter subject">
                         <label>Body</label>
@@ -311,7 +321,7 @@
 
                     <!-- Follow-up 2 -->
                     <div class="template-column">
-                        <h3>🔄 Follow-up 2 (after 6 days)</h3>
+                        <h3>Follow-up 2 (after 6 days)</h3>
                         <label>Subject</label>
                         <input type="text" id="followup2Subject" class="input-field" placeholder="Enter subject">
                         <label>Body</label>
@@ -322,74 +332,124 @@
 
                     <!-- Auto-Reply Template -->
                     <div class="template-column">
-                        <h3>📅 Auto-Reply (when they respond)</h3>
+                        <h3>Auto-reply (when they respond)</h3>
                         <label>Subject</label>
                         <input type="text" id="replySubject" class="input-field" placeholder="Enter subject">
                         <label>Body</label>
                         <div id="replyVariables" class="inline-variables"></div>
                         <textarea id="replyBody" class="textarea-field" rows="6"
                             placeholder="Auto-reply with calendar link. Use {{calendar_link}} for your calendar."></textarea>
-                        <p style="font-size: 12px; color: #666; margin-top: 5px;">
-                            💡 Available: {{first_name}}, {{company}}, {{calendar_link}}, {{email}}, and any CSV columns
-                        </p>
+                        <p class="template-hint">Available: {{first_name}}, {{company}}, {{calendar_link}}, {{email}}, and any CSV columns</p>
                     </div>
                 </div>
 
-                <button class="btn btn-save" onclick="saveTemplates()">💾 SAVE TEMPLATES</button>
+                <button type="button" class="btn btn-save" onclick="saveTemplates()">
+                    <i data-lucide="save" class="btn-icon" aria-hidden="true"></i> Save templates
+                </button>
             </div>
 
-            <!-- Settings Page -->
+            <!-- Settings Page (all config here; no .env required) -->
             <div id="settings-page" class="page">
                 <div class="page-header">
                     <h1>Settings</h1>
-                    <p class="subtitle">Configure your outreach system</p>
+                    <p class="subtitle">Configure license, sending limits, and email accounts</p>
                 </div>
 
-                <div class="settings-grid">
-                    <!-- Email Configuration -->
-                    <div class="settings-card">
-                        <h3>📧 Email Configuration</h3>
-                        <div class="setting-item">
-                            <label>Email Address</label>
-                            <input type="text" id="settingsEmail" class="input-field" readonly>
+                <form id="settings-form" class="settings-form" onsubmit="return saveAppSettings(event)">
+                    <div class="settings-grid">
+                        <div class="settings-card">
+                            <h3>License</h3>
+                            <div class="setting-item">
+                                <label>License sheet URL</label>
+                                <input type="url" id="settingsLicenseSheetUrl" class="input-field" placeholder="https://docs.google.com/.../export?format=csv">
+                            </div>
+                            <div class="setting-item">
+                                <label>License key</label>
+                                <input type="text" id="settingsLicenseKey" class="input-field" placeholder="Your license key">
+                            </div>
                         </div>
-                        <div class="setting-item">
-                            <label>SMTP Server</label>
-                            <input type="text" id="settingsSMTP" class="input-field" readonly>
+                        <div class="settings-card">
+                            <h3>Sending</h3>
+                            <div class="setting-item">
+                                <label>Daily email limit</label>
+                                <input type="number" id="settingsDailyLimit" class="input-field" min="1" placeholder="500">
+                            </div>
+                            <div class="setting-item">
+                                <label>Delay between emails (min–max seconds)</label>
+                                <div class="input-row">
+                                    <input type="number" id="settingsMinDelay" class="input-field" min="1" placeholder="60">
+                                    <span class="input-sep">–</span>
+                                    <input type="number" id="settingsMaxDelay" class="input-field" min="1" placeholder="120">
+                                </div>
+                            </div>
+                            <div class="setting-item">
+                                <label>Pause every N emails (longer break)</label>
+                                <input type="number" id="settingsPauseEvery" class="input-field" min="1" placeholder="20">
+                            </div>
+                            <div class="setting-item">
+                                <label>Pause duration (min–max minutes)</label>
+                                <div class="input-row">
+                                    <input type="number" id="settingsPauseMin" class="input-field" min="0" placeholder="5">
+                                    <span class="input-sep">–</span>
+                                    <input type="number" id="settingsPauseMax" class="input-field" min="0" placeholder="8">
+                                </div>
+                            </div>
                         </div>
-                        <div class="setting-item">
-                            <label>Calendar Link</label>
-                            <input type="text" id="settingsCalendar" class="input-field" readonly>
+                        <div class="settings-card settings-card-full">
+                            <h3>Calendar link</h3>
+                            <div class="setting-item">
+                                <label>URL for booking (e.g. Calendly)</label>
+                                <input type="url" id="settingsCalendarLink" class="input-field" placeholder="https://calendly.com/your-link">
+                            </div>
                         </div>
                     </div>
+                    <button type="submit" class="btn btn-primary">
+                        <i data-lucide="save" class="btn-icon" aria-hidden="true"></i> Save settings
+                    </button>
+                </form>
 
-                    <!-- Sending Configuration -->
-                    <div class="settings-card">
-                        <h3>⚙️ Sending Configuration</h3>
-                        <div class="setting-item">
-                            <label>Daily Email Limit</label>
-                            <input type="number" id="settingsDailyLimit" class="input-field" readonly>
-                        </div>
-                        <div class="setting-item">
-                            <label>Delay Between Emails (seconds)</label>
-                            <input type="text" id="settingsDelay" class="input-field" readonly>
-                        </div>
-                        <div class="setting-item">
-                            <label>Pause Every N Emails</label>
-                            <input type="number" id="settingsPauseEvery" class="input-field" readonly>
-                        </div>
-                    </div>
-
-                    <!-- License Information -->
-                    <div class="settings-card">
-                        <h3>🔐 License Information</h3>
-                        <div class="setting-item">
-                            <label>License Key</label>
-                            <input type="text" id="settingsLicense" class="input-field" readonly>
-                        </div>
-                        <div class="setting-item">
-                            <label>Status</label>
-                            <span class="status-badge" style="background: #90EE90; color: #2E7D32;">Active</span>
+                <div class="email-accounts-section">
+                    <h2>Email accounts</h2>
+                    <p class="section-desc">Add one or more SMTP/IMAP accounts. Sending is distributed across them.</p>
+                    <div id="emailAccountsList" class="email-accounts-list"></div>
+                    <div class="email-account-add-card">
+                        <h3>Add account</h3>
+                        <div class="add-account-form">
+                            <div class="setting-item">
+                                <label>Label</label>
+                                <input type="text" id="newAccountLabel" class="input-field" placeholder="e.g. Sales Gmail">
+                            </div>
+                            <div class="setting-item">
+                                <label>Email</label>
+                                <input type="email" id="newAccountEmail" class="input-field" placeholder="you@gmail.com">
+                            </div>
+                            <div class="setting-item">
+                                <label>App password</label>
+                                <input type="password" id="newAccountPassword" class="input-field" placeholder="App password (not regular password)">
+                            </div>
+                            <div class="setting-item">
+                                <label>SMTP server / port</label>
+                                <div class="input-row">
+                                    <input type="text" id="newAccountSmtpServer" class="input-field" value="smtp.gmail.com" placeholder="smtp.gmail.com">
+                                    <input type="number" id="newAccountSmtpPort" class="input-field input-narrow" value="587" placeholder="587">
+                                </div>
+                            </div>
+                            <div class="setting-item">
+                                <label>IMAP server / port</label>
+                                <div class="input-row">
+                                    <input type="text" id="newAccountImapServer" class="input-field" value="imap.gmail.com" placeholder="imap.gmail.com">
+                                    <input type="number" id="newAccountImapPort" class="input-field input-narrow" value="993" placeholder="993">
+                                </div>
+                            </div>
+                            <div class="setting-item setting-actions">
+                                <button type="button" class="btn btn-secondary" onclick="testNewAccountConnection()">
+                                    <i data-lucide="plug" class="btn-icon" aria-hidden="true"></i> Test connection
+                                </button>
+                                <span id="newAccountTestResult" class="test-result"></span>
+                            </div>
+                            <button type="button" class="btn btn-success" onclick="addEmailAccount()">
+                                <i data-lucide="plus" class="btn-icon" aria-hidden="true"></i> Add account
+                            </button>
                         </div>
                     </div>
                 </div>
