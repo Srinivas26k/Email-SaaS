@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 
 from backend.config import config
 from backend.database import init_db, get_db, Lead, Campaign, Log, LeadStatus, CampaignStatus
@@ -223,20 +224,34 @@ async def get_metrics(db: Session = Depends(get_db)):
 
 
 @app.get("/api/logs")
-async def get_logs(limit: int = 50, db: Session = Depends(get_db)):
-    """Get recent logs."""
-    logs = db.query(Log).order_by(Log.timestamp.desc()).limit(limit).all()
-    
+async def get_logs(
+    page: int = 1,
+    limit: int = 50,
+    search: str = None,
+    db: Session = Depends(get_db)
+):
+    """Get logs with pagination and optional search."""
+    query = db.query(Log).order_by(Log.timestamp.desc())
+    if search and search.strip():
+        term = f"%{search.strip()}%"
+        query = query.filter(or_(Log.event.like(term), Log.email.like(term)))
+    total = query.count()
+    offset = (page - 1) * limit
+    logs = query.offset(offset).limit(limit).all()
     return {
         "logs": [
             {
                 "id": log.id,
-                "email": log.email,
+                "email": log.email or "",
                 "event": log.event,
                 "timestamp": log.timestamp.isoformat()
             }
             for log in logs
-        ]
+        ],
+        "total": total,
+        "page": page,
+        "pages": (total + limit - 1) // limit if total else 1,
+        "limit": limit
     }
 
 

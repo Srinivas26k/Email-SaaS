@@ -4,7 +4,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Enterprise Outreach Dashboard</title>
+    <title>Outreach Intelligence — Email SaaS</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/styles.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -14,27 +17,36 @@
         <!-- Sidebar Navigation -->
         <aside class="sidebar">
             <div class="sidebar-header">
-                <h1>📧 Outreach</h1>
+                <h1 class="logo">Outreach</h1>
+                <p class="logo-sub">Intelligence</p>
             </div>
             <nav class="sidebar-nav">
                 <a href="#dashboard" class="nav-item active" onclick="navigateTo('dashboard')">
-                    <span class="nav-icon">📊</span>
+                    <span class="nav-icon">◉</span>
                     <span class="nav-text">Dashboard</span>
                 </a>
                 <a href="#leads" class="nav-item" onclick="navigateTo('leads')">
-                    <span class="nav-icon">👥</span>
+                    <span class="nav-icon">◐</span>
                     <span class="nav-text">Leads</span>
                 </a>
                 <a href="#analytics" class="nav-item" onclick="navigateTo('analytics')">
-                    <span class="nav-icon">📈</span>
+                    <span class="nav-icon">◈</span>
                     <span class="nav-text">Analytics</span>
                 </a>
+                <a href="#reports" class="nav-item" onclick="navigateTo('reports')">
+                    <span class="nav-icon">◔</span>
+                    <span class="nav-text">Reports</span>
+                </a>
+                <a href="#logs" class="nav-item" onclick="navigateTo('logs')">
+                    <span class="nav-icon">◎</span>
+                    <span class="nav-text">Logs</span>
+                </a>
                 <a href="#templates" class="nav-item" onclick="navigateTo('templates')">
-                    <span class="nav-icon">✉️</span>
+                    <span class="nav-icon">✉</span>
                     <span class="nav-text">Templates</span>
                 </a>
                 <a href="#settings" class="nav-item" onclick="navigateTo('settings')">
-                    <span class="nav-icon">⚙️</span>
+                    <span class="nav-icon">⚙</span>
                     <span class="nav-text">Settings</span>
                 </a>
             </nav>
@@ -103,9 +115,22 @@
                     </div>
                 </div>
 
+                <!-- Replied / Meetings pipeline -->
+                <div class="pipeline-section">
+                    <h2>Replied &amp; meeting pipeline</h2>
+                    <p class="section-desc">Leads who replied — calendar link sent automatically</p>
+                    <div class="pipeline-stats">
+                        <div class="pipeline-stat">
+                            <span class="pipeline-value" id="repliedCount">0</span>
+                            <span class="pipeline-label">Total replied</span>
+                        </div>
+                        <a href="#leads" class="pipeline-link" onclick="navigateTo('leads'); setTimeout(() => filterLeads('replied'), 100);">View replied leads →</a>
+                    </div>
+                </div>
+
                 <!-- Recent Activity -->
                 <div class="logs-section">
-                    <h2>Recent Activity</h2>
+                    <h2>Recent activity</h2>
                     <div id="dashboardLogsContainer" class="logs-container"></div>
                 </div>
             </div>
@@ -161,8 +186,16 @@
             <!-- Analytics Page -->
             <div id="analytics-page" class="page">
                 <div class="page-header">
-                    <h1>Analytics & Reports</h1>
-                    <p class="subtitle">Detailed insights into your campaigns</p>
+                    <h1>Analytics</h1>
+                    <p class="subtitle">Insights and performance over time</p>
+                </div>
+
+                <div class="date-range-bar">
+                    <label>Date range</label>
+                    <input type="date" id="analyticsDateFrom" class="input-field date-input">
+                    <span class="date-sep">→</span>
+                    <input type="date" id="analyticsDateTo" class="input-field date-input">
+                    <button type="button" class="btn btn-secondary" onclick="applyAnalyticsDateRange()">Apply</button>
                 </div>
 
                 <!-- Stats Summary -->
@@ -192,6 +225,49 @@
                         <canvas id="statusChart"></canvas>
                     </div>
                 </div>
+            </div>
+
+            <!-- Reports Page -->
+            <div id="reports-page" class="page">
+                <div class="page-header">
+                    <h1>Reports</h1>
+                    <p class="subtitle">Daily analytics report — preview and send</p>
+                </div>
+                <div class="reports-actions">
+                    <button type="button" class="btn btn-primary" onclick="previewReport()">Preview report</button>
+                    <button type="button" class="btn btn-success" onclick="sendReportNow()">Send report now</button>
+                </div>
+                <div id="reportPreviewCard" class="report-preview-card" style="display: none;">
+                    <h3>Report preview</h3>
+                    <div id="reportPreviewContent" class="report-preview-content"></div>
+                </div>
+            </div>
+
+            <!-- Logs Page -->
+            <div id="logs-page" class="page">
+                <div class="page-header">
+                    <h1>Logs</h1>
+                    <p class="subtitle">Full activity and event log</p>
+                </div>
+                <div class="logs-controls">
+                    <input type="text" id="logsSearch" class="search-input" placeholder="Search by event or email..." oninput="debounceSearchLogs()">
+                    <span class="logs-meta" id="logsMeta">—</span>
+                </div>
+                <div class="table-container">
+                    <table class="leads-table logs-table">
+                        <thead>
+                            <tr>
+                                <th>Time (UTC)</th>
+                                <th>Email</th>
+                                <th>Event</th>
+                            </tr>
+                        </thead>
+                        <tbody id="logsTableBody">
+                            <tr><td colspan="3" class="no-data">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="pagination" id="logsPagination"></div>
             </div>
 
             <!-- Templates Page -->

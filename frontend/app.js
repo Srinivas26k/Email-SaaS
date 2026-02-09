@@ -13,6 +13,10 @@ let currentLeadsFilter = 'all';
 let currentLeadsPage = 1;
 let currentLeadsSort = { by: 'id', order: 'desc' };
 let selectedLeadIds = [];
+let currentLogsPage = 1;
+let logsSearchTimeout = null;
+let analyticsDateFrom = null;
+let analyticsDateTo = null;
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
@@ -79,10 +83,15 @@ function loadPageData(page) {
             loadLeads();
             break;
         case 'analytics':
+            setDefaultAnalyticsDates();
             loadAnalytics();
             break;
+        case 'reports':
+            break;
+        case 'logs':
+            loadLogs();
+            break;
         case 'templates':
-            // Already loaded
             break;
         case 'settings':
             loadSettings();
@@ -175,6 +184,8 @@ async function loadMetrics() {
         document.getElementById('sentToday').textContent = `${data.sent_today} / ${data.daily_limit}`;
         document.getElementById('replies').textContent = data.replies;
         document.getElementById('failed').textContent = data.failed;
+        const repliedEl = document.getElementById('repliedCount');
+        if (repliedEl) repliedEl.textContent = data.replies;
 
         const statusBadge = document.getElementById('campaignStatus');
         statusBadge.textContent = data.campaign_status;
@@ -192,7 +203,7 @@ async function loadMetrics() {
 
 async function loadDashboardLogs() {
     try {
-        const response = await fetch(`${API_BASE}/api/logs?limit=10`);
+        const response = await fetch(`${API_BASE}/api/logs?page=1&limit=10`);
         const data = await response.json();
 
         const container = document.getElementById('dashboardLogsContainer');
@@ -387,8 +398,12 @@ function filterLeads(status) {
     currentLeadsFilter = status;
     currentLeadsPage = 1;
 
-    document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
-    event.target.classList.add('active');
+    const tabs = document.querySelectorAll('.filter-tab');
+    tabs.forEach(t => t.classList.remove('active'));
+    const order = ['all', 'pending', 'sent', 'replied', 'failed'];
+    const idx = order.indexOf(status);
+    if (idx >= 0 && tabs[idx]) tabs[idx].classList.add('active');
+    if (event && event.target) event.target.classList.add('active');
 
     loadLeads();
 }
@@ -439,9 +454,34 @@ function toggleSelectAll() {
 
 // ============ ANALYTICS ============
 
+function setDefaultAnalyticsDates() {
+    const to = new Date();
+    const from = new Date();
+    from.setDate(from.getDate() - 30);
+    document.getElementById('analyticsDateFrom').value = from.toISOString().slice(0, 10);
+    document.getElementById('analyticsDateTo').value = to.toISOString().slice(0, 10);
+    analyticsDateFrom = from.toISOString().slice(0, 10);
+    analyticsDateTo = to.toISOString().slice(0, 10);
+}
+
+function applyAnalyticsDateRange() {
+    const fromEl = document.getElementById('analyticsDateFrom');
+    const toEl = document.getElementById('analyticsDateTo');
+    if (fromEl && toEl) {
+        analyticsDateFrom = fromEl.value || null;
+        analyticsDateTo = toEl.value || null;
+        loadAnalytics();
+    }
+}
+
 async function loadAnalytics() {
     try {
-        const response = await fetch(`${API_BASE}/api/analytics`);
+        let url = `${API_BASE}/api/analytics`;
+        const params = [];
+        if (analyticsDateFrom) params.push(`date_from=${encodeURIComponent(analyticsDateFrom)}`);
+        if (analyticsDateTo) params.push(`date_to=${encodeURIComponent(analyticsDateTo)}`);
+        if (params.length) url += '?' + params.join('&');
+        const response = await fetch(url);
         const data = await response.json();
 
         // Update stats
@@ -471,6 +511,106 @@ async function loadAnalytics() {
     } catch (error) {
         console.error('Failed to load analytics:', error);
     }
+}
+
+// ============ REPORTS ============
+
+async function previewReport() {
+    try {
+        const response = await fetch(`${API_BASE}/api/report/preview`);
+        const data = await response.json();
+        const card = document.getElementById('reportPreviewCard');
+        const content = document.getElementById('reportPreviewContent');
+        if (!card || !content) return;
+        content.innerHTML = `
+            <div class="report-preview-stats">
+                <div class="rp-stat"><span class="rp-value">${data.today?.sent ?? 0}</span> Sent today</div>
+                <div class="rp-stat"><span class="rp-value">${data.today?.replied ?? 0}</span> Replied today</div>
+                <div class="rp-stat"><span class="rp-value">${data.overall?.reply_rate ?? 0}%</span> Reply rate</div>
+                <div class="rp-stat"><span class="rp-value">${data.overall?.total_leads ?? 0}</span> Total leads</div>
+            </div>
+            <p class="report-preview-note">Daily report email uses the same data and is sent at 1 AM. Use "Send report now" to email it immediately.</p>
+        `;
+        card.style.display = 'block';
+    } catch (error) {
+        console.error('Failed to load report preview:', error);
+        showNotification('Failed to load report preview', 'error');
+    }
+}
+
+async function sendReportNow() {
+    try {
+        showNotification('Sending report...', 'info');
+        const response = await fetch(`${API_BASE}/api/report/send`, { method: 'POST' });
+        const data = await response.json();
+        if (data.success) {
+            showNotification(data.message || 'Report sent', 'success');
+        } else {
+            showNotification(data.detail || 'Failed to send report', 'error');
+        }
+    } catch (error) {
+        showNotification('Error: ' + error.message, 'error');
+    }
+}
+
+// ============ LOGS ============
+
+function debounceSearchLogs() {
+    if (logsSearchTimeout) clearTimeout(logsSearchTimeout);
+    logsSearchTimeout = setTimeout(() => {
+        currentLogsPage = 1;
+        loadLogs();
+    }, 300);
+}
+
+async function loadLogs() {
+    try {
+        const search = document.getElementById('logsSearch')?.value?.trim() || '';
+        const params = new URLSearchParams({ page: currentLogsPage, limit: 50 });
+        if (search) params.append('search', search);
+        const response = await fetch(`${API_BASE}/api/logs?${params}`);
+        const data = await response.json();
+
+        const tbody = document.getElementById('logsTableBody');
+        if (!data.logs || data.logs.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3" class="no-data">No logs found</td></tr>';
+        } else {
+            tbody.innerHTML = data.logs.map(log => `
+                <tr>
+                    <td class="log-time">${formatLogTime(log.timestamp)}</td>
+                    <td class="log-email">${escapeHtml(log.email || '—')}</td>
+                    <td class="log-event">${escapeHtml(log.event)}</td>
+                </tr>
+            `).join('');
+        }
+
+        document.getElementById('logsMeta').textContent = `Page ${data.page} of ${data.pages || 1} · ${data.total ?? 0} total`;
+        renderLogsPagination(data.page, data.pages || 1);
+    } catch (error) {
+        console.error('Failed to load logs:', error);
+        document.getElementById('logsTableBody').innerHTML = '<tr><td colspan="3" class="no-data">Failed to load logs</td></tr>';
+    }
+}
+
+function formatLogTime(isoString) {
+    const d = new Date(isoString);
+    return d.toISOString().replace('T', ' ').slice(0, 19);
+}
+
+function renderLogsPagination(current, total) {
+    const container = document.getElementById('logsPagination');
+    if (!container || total <= 1) {
+        if (container) container.innerHTML = '';
+        return;
+    }
+    let html = '';
+    if (current > 1) html += `<button class="page-btn" onclick="currentLogsPage=${current - 1}; loadLogs();">← Prev</button>`;
+    for (let i = 1; i <= Math.min(total, 7); i++) {
+        const active = i === current ? 'active' : '';
+        html += `<button class="page-btn ${active}" onclick="currentLogsPage=${i}; loadLogs();">${i}</button>`;
+    }
+    if (current < total) html += `<button class="page-btn" onclick="currentLogsPage=${current + 1}; loadLogs();">Next →</button>`;
+    container.innerHTML = html;
 }
 
 // ============ TEMPLATES ============
@@ -725,22 +865,22 @@ function setupDragDrop() {
 
 function getStatusBGColor(status) {
     const colors = {
-        'RUNNING': '#90EE90',
-        'PAUSED': '#FFE082',
-        'STOPPED': '#FFCDD2',
-        'COMPLETED': '#BBDEFB'
+        'RUNNING': '#d1fae5',
+        'PAUSED': '#fef3c7',
+        'STOPPED': '#fee2e2',
+        'COMPLETED': '#e0e7ff'
     };
-    return colors[status] || '#E0E0E0';
+    return colors[status] || '#f1f5f9';
 }
 
 function getStatusTextColor(status) {
     const colors = {
-        'RUNNING': '#2E7D32',
-        'PAUSED': '#F57C00',
-        'STOPPED': '#C62828',
-        'COMPLETED': '#1565C0'
+        'RUNNING': '#047857',
+        'PAUSED': '#b45309',
+        'STOPPED': '#b91c1c',
+        'COMPLETED': '#4338ca'
     };
-    return colors[status] || '#666666';
+    return colors[status] || '#475569';
 }
 
 function formatDate(isoString) {

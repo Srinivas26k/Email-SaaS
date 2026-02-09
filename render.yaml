@@ -1,0 +1,13 @@
+# Render.com Blueprint - Email Outreach SaaS
+# Docs: https://render.com/docs/blueprint-spec
+# Deploy: New → Blueprint → Connect repo → Set env vars (see DEPLOYMENT_GUIDE.md) → Apply
+
+services:
+  - type: web
+    name: email-outreach-saas
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    # Add PostgreSQL from Render dashboard and set DATABASE_URL in Environment
+    # Required env: LICENSE_SHEET_URL, LICENSE_KEY, EMAIL_ADDRESS, EMAIL_PASSWORD, etc.
