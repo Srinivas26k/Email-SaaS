@@ -1,12 +1,15 @@
 """IMAP reply detection and automatic calendar link response for all accounts."""
 import imaplib
 import email
+import logging
 from datetime import datetime, timedelta
 from typing import Set
 
 from backend.database import SessionLocal, Lead, LeadStatus, Log
 from backend.settings_service import get_email_accounts, get_app_settings
 from backend.email_sender import EmailSender
+
+logger = logging.getLogger(__name__)
 
 
 class ReplyChecker:
@@ -19,12 +22,14 @@ class ReplyChecker:
         """Check each active account's INBOX for replies from leads."""
         accounts = get_email_accounts(active_only=True)
         if not accounts:
+            logger.debug("No email accounts for reply check")
             return
+        logger.info("Checking for replies...")
         for acc in accounts:
             try:
                 self._check_account(acc)
             except Exception as e:
-                print(f"Error checking replies for {acc.email}: {e}")
+                logger.exception("Error checking replies for %s: %s", getattr(acc, "email", "?"), e)
 
     def _check_account(self, acc):
         mail = imaplib.IMAP4_SSL(acc.imap_server, acc.imap_port, timeout=30)
@@ -71,11 +76,12 @@ class ReplyChecker:
                 )
                 session.commit()
                 self.processed_message_ids.add(message_id)
+                logger.info("Reply detected from %s, sending calendar link", sender_email)
                 self._send_calendar_response(sender_email, acc)
             finally:
                 session.close()
         except Exception as e:
-            print(f"Error processing message: {e}")
+            logger.exception("Error processing message: %s", e)
 
     @staticmethod
     def _extract_email(from_header: str) -> str:
@@ -125,10 +131,14 @@ Best regards"""
                 body = body.replace(f"{{{{{key}}}}}", str(value))
 
             sender = EmailSender(account=acc)
-            success = sender.send_email(to_email, subject, body)
+            # skip_rate_limit so reply flow does not block for 60-120s (calendar link is a single reply)
+            success = sender.send_email(to_email, subject, body, skip_rate_limit=True)
             if success:
+                logger.info("Sent calendar link to %s", to_email)
                 session.add(Log(email=to_email, event=f"Sent calendar link to {to_email}"))
                 session.commit()
+            else:
+                logger.warning("Failed to send calendar link to %s", to_email)
         finally:
             session.close()
 

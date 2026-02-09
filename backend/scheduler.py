@@ -91,6 +91,7 @@ class EmailScheduler:
 
             account = get_next_sending_account()
             if not account:
+                logger.warning("No email account configured. Add one in Settings, or set EMAIL_ADDRESS and EMAIL_PASSWORD in .env")
                 return
 
             lead = self._get_next_lead(session)
@@ -204,7 +205,8 @@ class EmailScheduler:
                     )
                 )
                 session.commit()
-                increment_account_sent_today(account.id)
+                acc_id = getattr(account, "id", None)
+                increment_account_sent_today(acc_id)
                 settings = get_app_settings()
                 daily_limit = int(settings.get("daily_email_limit", "500"))
                 logger.info(

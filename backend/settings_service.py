@@ -2,11 +2,14 @@
 import os
 import smtplib
 import imaplib
-from typing import Dict, List, Optional, Tuple
-from pathlib import Path
+import logging
+from types import SimpleNamespace
+from typing import Dict, List, Optional, Tuple, Any
 
 from backend.database import SessionLocal, AppSettings, EmailAccount
 from backend.config import config as env_config
+
+logger = logging.getLogger(__name__)
 
 # Keys for app_settings table
 KEYS = {
@@ -74,14 +77,39 @@ def save_app_settings(settings: Dict[str, str]) -> None:
         session.close()
 
 
-def get_email_accounts(active_only: bool = True) -> List[EmailAccount]:
-    """Get email accounts from DB, optionally only active."""
+def get_env_fallback_account() -> Optional[Any]:
+    """Return an account-like object from .env when no DB accounts exist (backward compatibility)."""
+    email = (getattr(env_config, "EMAIL_ADDRESS", None) or "").strip()
+    password = getattr(env_config, "EMAIL_PASSWORD", None) or ""
+    if not email or not password:
+        return None
+    return SimpleNamespace(
+        id=None,  # no DB id; scheduler will not call increment_account_sent_today
+        email=email,
+        password=password,
+        smtp_server=getattr(env_config, "SMTP_SERVER", "smtp.gmail.com") or "smtp.gmail.com",
+        smtp_port=int(getattr(env_config, "SMTP_PORT", 587) or 587),
+        imap_server=getattr(env_config, "IMAP_SERVER", "imap.gmail.com") or "imap.gmail.com",
+        imap_port=int(getattr(env_config, "IMAP_PORT", 993) or 993),
+        label=".env",
+        is_active=1,
+        sent_today=0,
+    )
+
+
+def get_email_accounts(active_only: bool = True) -> List[Any]:
+    """Get email accounts from DB. If none, returns env fallback as single-item list so .env still works."""
     session = SessionLocal()
     try:
         q = session.query(EmailAccount).order_by(EmailAccount.id)
         if active_only:
             q = q.filter(EmailAccount.is_active == 1)
-        return q.all()
+        accounts = q.all()
+        if not accounts:
+            env_acc = get_env_fallback_account()
+            if env_acc:
+                return [env_acc]
+        return accounts
     finally:
         session.close()
 
@@ -214,16 +242,19 @@ def test_imap_connection(
 
 
 def get_next_sending_account():
-    """Return the email account to use for the next send (round-robin by sent_today)."""
+    """Return the email account to use for the next send (round-robin by sent_today). Uses .env if no DB accounts."""
     accounts = get_email_accounts(active_only=True)
     if not accounts:
+        logger.warning("No email account configured. Add one in Settings, or set EMAIL_ADDRESS and EMAIL_PASSWORD in .env")
         return None
     # Use account with smallest sent_today for even distribution
-    return min(accounts, key=lambda a: a.sent_today)
+    return min(accounts, key=lambda a: getattr(a, "sent_today", 0))
 
 
-def increment_account_sent_today(account_id: int) -> None:
-    """Increment sent_today for an account (call after successful send)."""
+def increment_account_sent_today(account_id: Optional[int]) -> None:
+    """Increment sent_today for an account (call after successful send). No-op for env fallback (id is None)."""
+    if account_id is None:
+        return
     session = SessionLocal()
     try:
         acc = session.query(EmailAccount).filter(EmailAccount.id == account_id).first()

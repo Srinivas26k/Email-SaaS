@@ -94,6 +94,7 @@ function loadPageData(page) {
             loadLogs();
             break;
         case 'templates':
+            loadColumns();
             break;
         case 'settings':
             loadSettings();
@@ -619,30 +620,80 @@ function renderLogsPagination(current, total) {
 
 function displayColumns(columns) {
     const container = document.getElementById('variablesContainer');
+    const fromCsvEl = document.getElementById('placeholdersFromCsv');
+    const replyHintEl = document.getElementById('replyTemplateHint');
 
     if (!container) return;
 
-    if (columns.length === 0) {
-        container.innerHTML = '<p class="no-data">Upload CSV to see available columns</p>';
+    // Special variables always available (not from CSV)
+    const specialVars = ['calendar_link', 'email'];
+    const allVars = [...specialVars, ...(columns || [])];
+
+    if (!columns || columns.length === 0) {
+        container.innerHTML = '<p class="no-data">Upload a lead CSV on the Dashboard to see placeholders from your sheet.</p>';
+        if (fromCsvEl) {
+            fromCsvEl.textContent = '';
+            fromCsvEl.style.display = 'none';
+        }
+        if (replyHintEl) {
+            replyHintEl.textContent = 'Upload a lead CSV to see placeholders from your sheet. You can use {{calendar_link}}, {{email}}, and any column name from your CSV.';
+        }
+        // Still show special vars so they can use calendar_link and email
+        const specialOnly = ['calendar_link', 'email'];
+        container.innerHTML = '<p class="placeholder-sub">Always available:</p>' +
+            specialOnly.map(col => `<button class="variable-tag" onclick="insertVariable('${col}')">{{${col}}}</button>`).join('') +
+            '<p class="no-data" style="margin-top:0.75rem;">Upload a lead CSV to see placeholders from your sheet.</p>';
+        ['initial', 'followup1', 'followup2', 'reply'].forEach(type => {
+            const inlineContainer = document.getElementById(`${type}Variables`);
+            if (inlineContainer) {
+                inlineContainer.innerHTML = specialOnly.map(col =>
+                    `<button class="inline-var" onclick="insertVariableInto('${type}Body', '${col}')">{{${col}}}</button>`
+                ).join('');
+            }
+        });
         return;
     }
 
-    // Add special variables
-    const specialVars = ['calendar_link', 'email'];
-    const allVars = [...specialVars, ...columns];
+    // Show "From your lead sheet: col1, col2, ..."
+    if (fromCsvEl) {
+        fromCsvEl.textContent = 'From your lead sheet: ' + columns.map(c => '{{' + c + '}}').join(', ');
+        fromCsvEl.style.display = 'block';
+    }
 
+    // Safe for attribute: escape quotes in column name
+    const attr = (c) => String(c).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     container.innerHTML = allVars.map(col =>
-        `<button class="variable-tag" onclick="insertVariable('${col}')">{{${col}}}</button>`
+        `<button class="variable-tag" onclick="insertVariable('${attr(col)}')" type="button">${escapeHtml('{{' + col + '}}')}</button>`
     ).join('');
 
     ['initial', 'followup1', 'followup2', 'reply'].forEach(type => {
         const inlineContainer = document.getElementById(`${type}Variables`);
         if (inlineContainer) {
             inlineContainer.innerHTML = allVars.map(col =>
-                `<button class="inline-var" onclick="insertVariableInto('${type}Body', '${col}')">{{${col}}}</button>`
+                `<button class="inline-var" onclick="insertVariableInto('${type}Body', '${attr(col)}')" type="button">${escapeHtml('{{' + col + '}}')}</button>`
             ).join('');
         }
     });
+
+    // Dynamic placeholder examples using their CSV columns
+    const firstCol = columns[0] || 'first_name';
+    const examplePlaceholder = 'e.g. Hi {{' + firstCol + '}}, ... Use the buttons above to insert placeholders from your lead sheet.';
+    ['initialBody', 'followup1Body', 'followup2Body'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.placeholder = examplePlaceholder;
+    });
+    const replyBodyEl = document.getElementById('replyBody');
+    if (replyBodyEl) replyBodyEl.placeholder = 'e.g. Hi {{' + firstCol + '}}, ... Use {{calendar_link}} for booking. Use the buttons above to insert.';
+
+    const subjectPlaceholder = 'e.g. Quick question for {{' + firstCol + '}}';
+    ['initialSubject', 'followup1Subject', 'followup2Subject', 'replySubject'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.placeholder = subjectPlaceholder;
+    });
+
+    if (replyHintEl) {
+        replyHintEl.textContent = 'Placeholders from your lead sheet: ' + allVars.map(v => '{{' + v + '}}').join(', ');
+    }
 }
 
 function insertVariable(columnName) {

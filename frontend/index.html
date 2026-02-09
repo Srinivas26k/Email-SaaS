@@ -287,11 +287,13 @@
                     <p class="subtitle">Customize your outreach messages</p>
                 </div>
 
-                <!-- Available Variables -->
+                <!-- Placeholders from uploaded lead sheet -->
                 <div class="variables-section">
-                    <h3>Available Variables (click to insert)</h3>
+                    <h3>Placeholders from your lead sheet</h3>
+                    <p id="placeholdersFromCsv" class="placeholders-from-csv" style="display: none;"></p>
+                    <p class="placeholder-helper">Click a placeholder to insert it into the focused subject or body.</p>
                     <div id="variablesContainer" class="variables-tags">
-                        <p class="no-data">Upload CSV to see available columns</p>
+                        <p class="no-data">Upload a lead CSV on the Dashboard to see placeholders from your sheet.</p>
                     </div>
                 </div>
 
@@ -338,8 +340,8 @@
                         <label>Body</label>
                         <div id="replyVariables" class="inline-variables"></div>
                         <textarea id="replyBody" class="textarea-field" rows="6"
-                            placeholder="Auto-reply with calendar link. Use {{calendar_link}} for your calendar."></textarea>
-                        <p class="template-hint">Available: {{first_name}}, {{company}}, {{calendar_link}}, {{email}}, and any CSV columns</p>
+                            placeholder="Auto-reply with calendar link. Use the buttons above to insert placeholders."></textarea>
+                        <p id="replyTemplateHint" class="template-hint">Upload a lead CSV to see placeholders from your sheet.</p>
                     </div>
                 </div>
 

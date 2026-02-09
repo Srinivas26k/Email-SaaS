@@ -21,10 +21,17 @@ class EmailSender:
         self.account = account
         self.emails_sent_in_session = 0
 
-    def send_email(self, to_email: str, subject: str, body: str, is_html: bool = False) -> bool:
+    def send_email(
+        self,
+        to_email: str,
+        subject: str,
+        body: str,
+        is_html: bool = False,
+        skip_rate_limit: bool = False,
+    ) -> bool:
         """
         Send email via SMTP.
-        Uses self.account if set; otherwise tries to use first available account from DB.
+        skip_rate_limit: if True, do not apply delay after sending (use for reply/calendar link).
         """
         account = self._get_account()
         if not account:
@@ -42,7 +49,7 @@ class EmailSender:
                 server.send_message(msg)
 
             self.emails_sent_in_session += 1
-            if not is_html:
+            if not is_html and not skip_rate_limit:
                 self._apply_rate_limit()
             return True
         except Exception as e:
